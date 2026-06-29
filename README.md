@@ -1,4 +1,4 @@
-# 🚀 Hack Jam 2026 - Team 00
+# 🚀 Hack Jam 2026 - Team 05
 
 Welcome to your team's official Hack Jam 2026 project repository. This is where your team will plan, build, document, and deliver your **Tech Futures: Illuminate Your Path** application prototype.
 
