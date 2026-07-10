@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+ 
+datasource db {
+  provider = "sqlite"
+}
+ 
+model User {
+  id          Int         @id @default(autoincrement())
+  githubId    String?     @unique
+  username    String      @unique
+  email       String?     @unique
+  password    String?
+  displayName String?
+  avatarUrl   String?
+  stage       String      @default("Aspiring Per Scholian")
+  careerGoal  String      @default("Software Developer")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+ 
+  skills      Skill[]
+  roadmaps    Roadmap[]
+  milestones  Milestone[]
+}
+ 
+model Skill {
+  id     Int    @id @default(autoincrement())
+  name   String
+  level  String
+  userId Int
+  user   User   @relation(fields: [userId], references: [id])
+}
+ 
+model Roadmap {
+  id          Int    @id @default(autoincrement())
+  title       String
+  description String
+  order       Int
+  userId      Int
+  user        User   @relation(fields: [userId], references: [id])
+}
+ 
+model Milestone {
+  id        Int     @id @default(autoincrement())
+  title     String
+  completed Boolean @default(false)
+  userId    Int
+  user      User    @relation(fields: [userId], references: [id])
+}
