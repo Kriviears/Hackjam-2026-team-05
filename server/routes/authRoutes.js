@@ -1,7 +1,7 @@
 const router = require("express").Router();
 const passport = require("passport");
 const bcrypt = require("bcrypt");
-const { PrismaClient } = require("../generated/prisma/client");
+const { PrismaClient } = require("@prisma/client");
 const { PrismaBetterSqlite3 } = require("@prisma/adapter-better-sqlite3");
 const { signToken } = require("../utils/auth");
  
