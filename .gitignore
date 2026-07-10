@@ -10,3 +10,6 @@ dev.db
 
 # Generated Prisma client
 generated/
+
+# Locally uploaded resumes
+server/uploads/
