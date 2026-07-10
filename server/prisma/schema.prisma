@@ -1,51 +1,152 @@
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
   output   = "../generated/prisma"
 }
- 
+
 datasource db {
   provider = "sqlite"
 }
- 
+
 model User {
-  id          Int         @id @default(autoincrement())
-  githubId    String?     @unique
-  username    String      @unique
-  email       String?     @unique
+  id          Int      @id @default(autoincrement())
+  githubId    String?  @unique
+  username    String   @unique
+  email       String?  @unique
   password    String?
   displayName String?
   avatarUrl   String?
-  stage       String      @default("Aspiring Per Scholian")
-  careerGoal  String      @default("Software Developer")
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
- 
-  skills      Skill[]
-  roadmaps    Roadmap[]
-  milestones  Milestone[]
+  stage       String   @default("Aspiring Per Scholian")
+  careerGoal  String   @default("Software Developer")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  resumes           Resume[]
+  skills            Skill[]
+  employmentHistory EmploymentHistory[]
+  education         Education[]
+  roadmaps          Roadmap[]
+  milestones        Milestone[]
 }
- 
+
+model Resume {
+  id               Int    @id @default(autoincrement())
+  userId           Int
+  originalFileName String
+  storedFileName   String
+  mimeType         String
+  fileSize         Int?
+  filePath         String
+
+  // UPLOADED, PROCESSING, COMPLETED, or FAILED
+  processingStatus String  @default("UPLOADED")
+  processingError  String?
+
+  uploadedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  analysis          ResumeAnalysis?
+  skills            Skill[]
+  employmentHistory EmploymentHistory[]
+  education         Education[]
+}
+
+model ResumeAnalysis {
+  id                  Int     @id @default(autoincrement())
+  resumeId            Int     @unique
+  rawExtractedText    String?
+  professionalSummary String?
+
+  // PENDING, PROCESSING, COMPLETED, or FAILED
+  analysisStatus String    @default("PENDING")
+  analysisError  String?
+  analyzedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+}
+
 model Skill {
-  id     Int    @id @default(autoincrement())
-  name   String
-  level  String
-  userId Int
-  user   User   @relation(fields: [userId], references: [id])
+  id              Int         @id @default(autoincrement())
+  userId          Int
+  resumeId        Int?
+  name            String
+  category        String?
+  level           String?
+  source          SkillSource
+  confidence      Float?
+  confirmedByUser Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resume Resume? @relation(fields: [resumeId], references: [id], onDelete: SetNull)
 }
- 
+
+enum SkillSource {
+  RESUME
+  GITHUB
+  PER_SCHOLAS
+  CERTIFICATION
+  MANUAL
+  AI_INFERRED
+  EMPLOYER
+  MENTOR
+}
+
+model EmploymentHistory {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  resumeId        Int?
+  company         String
+  jobTitle        String
+  location        String?
+  startDate       String?
+  endDate         String?
+  isCurrentRole   Boolean  @default(false)
+  description     String?
+  confirmedByUser Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resume Resume? @relation(fields: [resumeId], references: [id], onDelete: SetNull)
+}
+
+model Education {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  resumeId        Int?
+  institution     String
+  degree          String?
+  fieldOfStudy    String?
+  startDate       String?
+  endDate         String?
+  description     String?
+  confirmedByUser Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resume Resume? @relation(fields: [resumeId], references: [id], onDelete: SetNull)
+}
+
 model Roadmap {
   id          Int    @id @default(autoincrement())
   title       String
   description String
   order       Int
   userId      Int
-  user        User   @relation(fields: [userId], references: [id])
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
- 
+
 model Milestone {
   id        Int     @id @default(autoincrement())
   title     String
   completed Boolean @default(false)
   userId    Int
-  user      User    @relation(fields: [userId], references: [id])
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
