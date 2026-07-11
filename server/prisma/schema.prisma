@@ -200,6 +200,9 @@ model CareerRole {
   annual10thPercentileSeriesId String?
   annual90thPercentileSeriesId String?
 
+  employmentGrowthPercent Float?
+  jobOutlook              String?
+
   // Wage data
   salaryMin Int?
   salaryMax Int?
@@ -212,6 +215,9 @@ model CareerRole {
   targetScore Int      @default(70)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  // BLS cache tracking
+  blsDataUpdatedAt DateTime?
 
   requiredSkills   RoleSkill[]
   recommendations  RoleRecommendation[]
