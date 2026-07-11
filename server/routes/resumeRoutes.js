@@ -1,11 +1,18 @@
+// DEPENDENCIES
 const router = require("express").Router();
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 
 const { PrismaClient } = require("@prisma/client");
-const { PrismaBetterSqlite3 } = require("@prisma/adapter-better-sqlite3");
+const {
+  PrismaBetterSqlite3,
+} = require("@prisma/adapter-better-sqlite3");
+
 const { authMiddleware } = require("../utils/auth");
+const {
+  extractResumeText,
+} = require("../services/resumeTextExtractor");
 
 // DATABASE
 const adapter = new PrismaBetterSqlite3({
@@ -15,9 +22,16 @@ const adapter = new PrismaBetterSqlite3({
 const prisma = new PrismaClient({ adapter });
 
 // UPLOAD DIRECTORY
-const uploadDirectory = path.join(__dirname, "..", "uploads", "resumes");
+const uploadDirectory = path.join(
+  __dirname,
+  "..",
+  "uploads",
+  "resumes"
+);
 
-fs.mkdirSync(uploadDirectory, { recursive: true });
+fs.mkdirSync(uploadDirectory, {
+  recursive: true,
+});
 
 // FILE STORAGE
 const storage = multer.diskStorage({
@@ -26,21 +40,43 @@ const storage = multer.diskStorage({
   },
 
   filename: (req, file, callback) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    const extension = path.extname(file.originalname).toLowerCase();
+    const uniqueSuffix = `${Date.now()}-${Math.round(
+      Math.random() * 1e9
+    )}`;
+
+    const extension = path
+      .extname(file.originalname)
+      .toLowerCase();
 
     callback(null, `${uniqueSuffix}${extension}`);
   },
 });
 
 // FILE VALIDATION
+// FILE VALIDATION
+const allowedExtensions = [".pdf", ".docx"];
+
 const allowedMimeTypes = [
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/octet-stream",
 ];
 
 const fileFilter = (req, file, callback) => {
-  if (!allowedMimeTypes.includes(file.mimetype)) {
+  const extension = path
+    .extname(file.originalname)
+    .toLowerCase();
+
+  console.log("Uploaded file:", {
+    originalname: file.originalname,
+    mimetype: file.mimetype,
+    extension,
+  });
+
+  const validExtension = allowedExtensions.includes(extension);
+  const validMimeType = allowedMimeTypes.includes(file.mimetype);
+
+  if (!validExtension || !validMimeType) {
     return callback(
       new Error("Only PDF and DOCX résumé files are supported.")
     );
@@ -63,6 +99,8 @@ router.post(
   authMiddleware,
   upload.single("resume"),
   async (req, res) => {
+    let resume;
+
     try {
       if (!req.file) {
         return res.status(400).json({
@@ -70,7 +108,8 @@ router.post(
         });
       }
 
-      const resume = await prisma.resume.create({
+      // Create the résumé record before processing begins.
+      resume = await prisma.resume.create({
         data: {
           userId: req.user.id,
           originalFileName: req.file.originalname,
@@ -78,31 +117,167 @@ router.post(
           mimeType: req.file.mimetype,
           fileSize: req.file.size,
           filePath: req.file.path,
-          processingStatus: "UPLOADED",
+          processingStatus: "PROCESSING",
+        },
+      });
+
+      // Extract readable text from the uploaded document.
+      const extractedText = await extractResumeText(
+        req.file.path,
+        req.file.mimetype
+      );
+
+      if (!extractedText) {
+        throw new Error(
+          "No readable text could be extracted from the résumé."
+        );
+      }
+
+      // Store the extracted text for later AI analysis.
+      const analysis = await prisma.resumeAnalysis.create({
+        data: {
+          resumeId: resume.id,
+          rawExtractedText: extractedText,
+          analysisStatus: "COMPLETED",
+          analyzedAt: new Date(),
+        },
+      });
+
+      // Mark the résumé processing as complete.
+      const completedResume = await prisma.resume.update({
+        where: {
+          id: resume.id,
+        },
+        data: {
+          processingStatus: "COMPLETED",
+          processingError: null,
         },
       });
 
       return res.status(201).json({
-        message: "Résumé uploaded successfully.",
+        message:
+          "Résumé uploaded and text extracted successfully.",
+        resume: {
+          id: completedResume.id,
+          originalFileName:
+            completedResume.originalFileName,
+          mimeType: completedResume.mimeType,
+          fileSize: completedResume.fileSize,
+          processingStatus:
+            completedResume.processingStatus,
+          uploadedAt: completedResume.uploadedAt,
+        },
+        analysis: {
+          id: analysis.id,
+          status: analysis.analysisStatus,
+          textLength: extractedText.length,
+          rawExtractedText: extractedText,
+        },
+      });
+    } catch (error) {
+      console.error("Résumé processing error:", error);
+
+      // Update the existing résumé record if it was already created.
+      if (resume) {
+        try {
+          await prisma.resume.update({
+            where: {
+              id: resume.id,
+            },
+            data: {
+              processingStatus: "FAILED",
+              processingError: error.message,
+            },
+          });
+
+          await prisma.resumeAnalysis.upsert({
+            where: {
+              resumeId: resume.id,
+            },
+            update: {
+              analysisStatus: "FAILED",
+              analysisError: error.message,
+            },
+            create: {
+              resumeId: resume.id,
+              analysisStatus: "FAILED",
+              analysisError: error.message,
+            },
+          });
+        } catch (databaseError) {
+          console.error(
+            "Unable to record résumé processing failure:",
+            databaseError
+          );
+        }
+      } else if (
+        req.file?.path &&
+        fs.existsSync(req.file.path)
+      ) {
+        // Remove the file if the database record was never created.
+        fs.unlinkSync(req.file.path);
+      }
+
+      return res.status(422).json({
+        message:
+          "Résumé upload completed, but text extraction failed.",
+        resumeId: resume?.id || null,
+        error: error.message,
+      });
+    }
+  }
+);
+
+// GET /api/resumes/:resumeId/analysis
+router.get(
+  "/:resumeId/analysis",
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const resumeId = Number(req.params.resumeId);
+
+      if (!Number.isInteger(resumeId)) {
+        return res.status(400).json({
+          message: "A valid résumé ID is required.",
+        });
+      }
+
+      const resume = await prisma.resume.findFirst({
+        where: {
+          id: resumeId,
+          userId: req.user.id,
+        },
+        include: {
+          analysis: true,
+        },
+      });
+
+      if (!resume) {
+        return res.status(404).json({
+          message: "Résumé not found.",
+        });
+      }
+
+      return res.json({
         resume: {
           id: resume.id,
           originalFileName: resume.originalFileName,
           mimeType: resume.mimeType,
           fileSize: resume.fileSize,
           processingStatus: resume.processingStatus,
+          processingError: resume.processingError,
           uploadedAt: resume.uploadedAt,
         },
+        analysis: resume.analysis,
       });
     } catch (error) {
-      // Remove the uploaded file if the database operation fails.
-      if (req.file?.path && fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
-
-      console.error("Résumé upload error:", error);
+      console.error(
+        "Unable to retrieve résumé analysis:",
+        error
+      );
 
       return res.status(500).json({
-        message: "Unable to upload résumé.",
+        message: "Unable to retrieve résumé analysis.",
       });
     }
   }
