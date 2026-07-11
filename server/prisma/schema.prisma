@@ -185,21 +185,39 @@ model Milestone {
 }
 
 model CareerRole {
-  id          Int      @id @default(autoincrement())
-  title       String   @unique
-  description String
-  lucideIcon  String
-  salaryMin   Int?
-  salaryMax   Int?
-  targetScore Int      @default(70)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             Int      @id @default(autoincrement())
+
+  // Display fields
+  title          String
+  description    String
+  lucideIcon     String?
+
+  // Standard occupation identifiers
+  onetSocCode    String   @unique
+  blsOccupationCode String?
+
+  // Wage data
+  salaryMin      Int?
+  salaryMax      Int?
+  medianSalary   Int?
+  salaryArea     String?
+  salaryYear     Int?
+
+  // Source tracking
+  occupationSource String @default("ONET")
+  wageSource       String?
+  sourceUpdatedAt  DateTime?
+
+  targetScore    Int      @default(70)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   requiredSkills   RoleSkill[]
   recommendations  RoleRecommendation[]
   optimizations    ResumeOptimization[]
   readinessReports ReadinessReport[]
 }
+
 
 model RoleSkill {
   id           Int     @id @default(autoincrement())
