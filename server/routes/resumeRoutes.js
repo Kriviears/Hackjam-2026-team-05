@@ -14,6 +14,10 @@ const {
   extractResumeText,
 } = require("../services/resumeTextExtractor");
 
+const {
+  analyzeResume,
+} = require("../services/ai/resumeAnalyzer");
+
 // DATABASE
 const adapter = new PrismaBetterSqlite3({
   url: process.env.DATABASE_URL || "file:./dev.db",
@@ -222,6 +226,214 @@ router.post(
         message:
           "Résumé upload completed, but text extraction failed.",
         resumeId: resume?.id || null,
+        error: error.message,
+      });
+    }
+  }
+);
+
+// POST /api/resumes/:resumeId/analyze
+router.post(
+  "/:resumeId/analyze",
+  authMiddleware,
+  async (req, res) => {
+    const resumeId = Number(req.params.resumeId);
+
+    if (!Number.isInteger(resumeId)) {
+      return res.status(400).json({
+        message: "A valid résumé ID is required.",
+      });
+    }
+
+    try {
+      const resume = await prisma.resume.findFirst({
+        where: {
+          id: resumeId,
+          userId: req.user.id,
+        },
+        include: {
+          analysis: true,
+        },
+      });
+
+      if (!resume) {
+        return res.status(404).json({
+          message: "Résumé not found.",
+        });
+      }
+
+      const rawResumeText =
+        resume.analysis?.rawExtractedText;
+
+      if (!rawResumeText) {
+        return res.status(409).json({
+          message:
+            "Résumé text has not been extracted yet.",
+        });
+      }
+
+      await prisma.resumeAnalysis.update({
+        where: {
+          resumeId,
+        },
+        data: {
+          analysisStatus: "PROCESSING",
+          analysisError: null,
+        },
+      });
+
+      const structuredAnalysis =
+        await analyzeResume(rawResumeText);
+
+      const savedResult = await prisma.$transaction(
+        async (transaction) => {
+          // Remove previous extracted records if the résumé is re-analyzed.
+          await transaction.skill.deleteMany({
+            where: {
+              resumeId,
+              source: "RESUME",
+            },
+          });
+
+          await transaction.employmentHistory.deleteMany({
+            where: {
+              resumeId,
+            },
+          });
+
+          await transaction.education.deleteMany({
+            where: {
+              resumeId,
+            },
+          });
+
+          if (structuredAnalysis.skills.length > 0) {
+            await transaction.skill.createMany({
+              data: structuredAnalysis.skills.map(
+                (skill) => ({
+                  userId: req.user.id,
+                  resumeId,
+                  name: skill.name,
+                  category: skill.category || null,
+                  level: skill.level || null,
+                  source: "RESUME",
+                  confidence:
+                    typeof skill.confidence === "number"
+                      ? skill.confidence
+                      : null,
+                  confirmedByUser: false,
+                })
+              ),
+            });
+          }
+
+          if (
+            structuredAnalysis.employmentHistory.length > 0
+          ) {
+            await transaction.employmentHistory.createMany({
+              data:
+                structuredAnalysis.employmentHistory.map(
+                  (job) => ({
+                    userId: req.user.id,
+                    resumeId,
+                    company: job.company,
+                    jobTitle: job.jobTitle,
+                    location: job.location || null,
+                    startDate: job.startDate || null,
+                    endDate: job.endDate || null,
+                    isCurrentRole:
+                      Boolean(job.isCurrentRole),
+                    description:
+                      job.description || null,
+                    confirmedByUser: false,
+                  })
+                ),
+            });
+          }
+
+          if (structuredAnalysis.education.length > 0) {
+            await transaction.education.createMany({
+              data: structuredAnalysis.education.map(
+                (education) => ({
+                  userId: req.user.id,
+                  resumeId,
+                  institution: education.institution,
+                  degree: education.degree || null,
+                  fieldOfStudy:
+                    education.fieldOfStudy || null,
+                  startDate: education.startDate || null,
+                  endDate: education.endDate || null,
+                  description:
+                    education.description || null,
+                  confirmedByUser: false,
+                })
+              ),
+            });
+          }
+
+          await transaction.resumeAnalysis.update({
+            where: {
+              resumeId,
+            },
+            data: {
+              professionalSummary:
+                structuredAnalysis.professionalSummary,
+              analysisStatus: "COMPLETED",
+              analysisError: null,
+              analyzedAt: new Date(),
+            },
+          });
+
+          return transaction.resume.findUnique({
+            where: {
+              id: resumeId,
+            },
+            include: {
+              analysis: true,
+              skills: true,
+              employmentHistory: true,
+              education: true,
+            },
+          });
+        }
+      );
+
+      return res.json({
+        message: "Résumé analyzed successfully.",
+        resumeId,
+        analysis: {
+          status:
+            savedResult.analysis.analysisStatus,
+          professionalSummary:
+            savedResult.analysis.professionalSummary,
+          skills: savedResult.skills,
+          employmentHistory:
+            savedResult.employmentHistory,
+          education: savedResult.education,
+        },
+      });
+    } catch (error) {
+      console.error("Résumé AI analysis failed:", error);
+
+      try {
+        await prisma.resumeAnalysis.update({
+          where: {
+            resumeId,
+          },
+          data: {
+            analysisStatus: "FAILED",
+            analysisError: error.message,
+          },
+        });
+      } catch (statusError) {
+        console.error(
+          "Unable to save failed analysis status:",
+          statusError
+        );
+      }
+
+      return res.status(500).json({
+        message: "Unable to analyze résumé.",
         error: error.message,
       });
     }
