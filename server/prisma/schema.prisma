@@ -196,12 +196,13 @@ model CareerRole {
   onetSocCode       String  @unique
   blsOccupationCode String?
 
+  // BLS  Series Code to Retrieve  Salary Info
+  annual10thPercentileSeriesId String?
+  annual90thPercentileSeriesId String?
+
   // Wage data
-  salaryMin    Int?
-  salaryMax    Int?
-  medianSalary Int?
-  salaryArea   String?
-  salaryYear   Int?
+  salaryMin Int?
+  salaryMax Int?
 
   // Source tracking
   occupationSource String    @default("ONET")
