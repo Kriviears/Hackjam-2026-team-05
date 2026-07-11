@@ -461,6 +461,21 @@ router.get(
         },
         include: {
           analysis: true,
+          skills: {
+            orderBy: {
+              name: "asc",
+            },
+          },
+          employmentHistory: {
+            orderBy: {
+              id: "asc",
+            },
+          },
+          education: {
+            orderBy: {
+              id: "asc",
+            },
+          },
         },
       });
 
@@ -480,7 +495,52 @@ router.get(
           processingError: resume.processingError,
           uploadedAt: resume.uploadedAt,
         },
-        analysis: resume.analysis,
+
+        analysis: resume.analysis
+          ? {
+              id: resume.analysis.id,
+              analysisStatus: resume.analysis.analysisStatus,
+              professionalSummary:
+                resume.analysis.professionalSummary,
+              analysisError: resume.analysis.analysisError,
+              analyzedAt: resume.analysis.analyzedAt,
+            }
+          : null,
+
+        skills: resume.skills.map((skill) => ({
+          id: skill.id,
+          name: skill.name,
+          category: skill.category,
+          level: skill.level,
+          source: skill.source,
+          confidence: skill.confidence,
+          confirmedByUser: skill.confirmedByUser,
+        })),
+
+        employmentHistory: resume.employmentHistory.map(
+          (job) => ({
+            id: job.id,
+            company: job.company,
+            jobTitle: job.jobTitle,
+            location: job.location,
+            startDate: job.startDate,
+            endDate: job.endDate,
+            isCurrentRole: job.isCurrentRole,
+            description: job.description,
+            confirmedByUser: job.confirmedByUser,
+          })
+        ),
+
+        education: resume.education.map((item) => ({
+          id: item.id,
+          institution: item.institution,
+          degree: item.degree,
+          fieldOfStudy: item.fieldOfStudy,
+          startDate: item.startDate,
+          endDate: item.endDate,
+          description: item.description,
+          confirmedByUser: item.confirmedByUser,
+        })),
       });
     } catch (error) {
       console.error(
@@ -494,6 +554,60 @@ router.get(
     }
   }
 );
+
+// GET /api/resumes/:resumeId/raw-text
+router.get(
+  "/:resumeId/raw-text",
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const resumeId = Number(req.params.resumeId);
+
+      if (!Number.isInteger(resumeId)) {
+        return res.status(400).json({
+          message: "A valid résumé ID is required.",
+        });
+      }
+
+      const resume = await prisma.resume.findFirst({
+        where: {
+          id: resumeId,
+          userId: req.user.id,
+        },
+        include: {
+          analysis: {
+            select: {
+              rawExtractedText: true,
+            },
+          },
+        },
+      });
+
+      if (!resume) {
+        return res.status(404).json({
+          message: "Résumé not found.",
+        });
+      }
+
+      return res.json({
+        resumeId: resume.id,
+        originalFileName: resume.originalFileName,
+        rawExtractedText:
+          resume.analysis?.rawExtractedText || null,
+      });
+    } catch (error) {
+      console.error(
+        "Unable to retrieve raw résumé text:",
+        error
+      );
+
+      return res.status(500).json({
+        message: "Unable to retrieve raw résumé text.",
+      });
+    }
+  }
+);
+
 
 // MULTER ERROR HANDLER
 router.use((error, req, res, next) => {
