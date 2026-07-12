@@ -8,6 +8,9 @@ node_modules/
 dev.db
 *.db-journal
 
+ Allow the shared demo database
+!server/data/dev.db
+
 # Generated Prisma client
 generated/
 

@@ -197,8 +197,8 @@ model CareerRole {
   blsOccupationCode String?
 
   // BLS  Series Code to Retrieve  Salary Info
-  annual10thPercentileSeriesId String?
-  annual90thPercentileSeriesId String?
+  annual10thPercentileSeriesCode String @default("11")
+  annual90thPercentileSeriesCode String @default("15")
 
   employmentGrowthPercent Float?
   jobOutlook              String?
