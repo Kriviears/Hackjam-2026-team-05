@@ -3,13 +3,11 @@ import { useNavigate } from "react-router-dom";
 import StepIndicator from "../components/StepIndicator.jsx";
 import DropZone from "../components/DropZone.jsx";
 
-
 const inputClass =
   "w-full rounded-xl border border-line bg-white px-4 py-3 text-[15px] " +
   "placeholder:text-muted/60 focus:border-ps-blue focus:outline-none";
 
 export default function ResumeUpload() {
-  const [parsed, setParsed] = useState(false);
   const [github, setGithub] = useState("");
   const navigate = useNavigate();
 
@@ -23,17 +21,15 @@ export default function ResumeUpload() {
           Let's see what you're working with
         </h1>
         <p className="mx-auto mt-3 max-w-md text-muted">
-          Upload your resume and we'll suggest the roles you're closest to —
-          no pigeonholing, the AI reads you first.
+          Add your GitHub and upload your resume — we'll suggest the roles
+          you're closest to. No pigeonholing, the AI reads you first.
         </p>
       </header>
 
       <div className="mt-10 space-y-4">
-        <DropZone onParsed={() => navigate("/careers")} />
-
         <div>
           <label htmlFor="github" className="microtype mb-1.5 block text-muted">
-            Add your GitHub — optional, improves your assessment
+            Add your GitHub — required for your assessment
           </label>
           <input
             id="github"
@@ -43,6 +39,19 @@ export default function ResumeUpload() {
             onChange={(e) => setGithub(e.target.value)}
           />
         </div>
+
+        {github.trim() ? (
+          <DropZone onParsed={() => navigate("/careers")} />
+        ) : (
+          <div className="rounded-2xl border-2 border-dashed border-line bg-white/50 p-10 text-center opacity-60">
+            <p className="text-lg font-semibold text-muted">
+              Enter your GitHub to unlock resume upload
+            </p>
+            <p className="microtype mt-2 text-muted">
+              We scan public repos as part of your assessment
+            </p>
+          </div>
+        )}
       </div>
     </main>
   );
