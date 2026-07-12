@@ -1,4 +1,4 @@
-## Dependencies
+# Dependencies
 node_modules/
 
 # Environment files
@@ -10,6 +10,7 @@ dist/
 
 # Database
 server/dev.db
+server/data/
 server/prisma/dev.db
 
 # Prisma generated client
