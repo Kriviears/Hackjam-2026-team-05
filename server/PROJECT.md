@@ -63,34 +63,20 @@ The application should eventually allow users to:
 
 ---
 
-## Current Backend Structure
+## Repository Source of Truth
 
-The exact folder structure should be confirmed against the repository before making changes.
+When assisting with this project, inspect these files in this order:
 
-The project currently includes or is expected to include folders similar to:
+1. PROJECT.md
+2. SESSION.md
+3. package.json
+4. server.js
+5. prisma/schema.prisma
+6. prisma.config.ts
+7. Relevant route files
+8. Relevant service files
 
-```text
-backend/
-├── config/
-├── controllers/
-├── middleware/
-├── prisma/
-├── routes/
-├── services/
-├── utils/
-├── uploads/
-├── .env
-├── .env.example
-├── .gitignore
-├── package.json
-├── PROJECT.md
-├── SESSION.md
-└── server.js
-```
-
-Do not assume every folder listed above currently exists.
-
-Always inspect the actual repository before creating or moving files.
+Repository code always takes precedence over documentation.
 
 ---
 
@@ -504,57 +490,6 @@ Never place real credentials in this document.
 
 ---
 
-## Current Broad Status
-
-Likely completed or substantially implemented:
-
-* Express backend setup
-* Prisma setup
-* SQLite database
-* User-related routes
-* Roadmap-related routes
-* Passport.js configuration
-* GitHub OAuth configuration
-* JWT generation
-* Career role data
-* Career recommendation logic
-* O*NET data integration
-* BLS salary or employment data integration
-* BLS availability metadata
-
-Needs confirmation in the current repository:
-
-* Exact authentication flow
-* Exact recommendation routes
-* Exact resume upload implementation
-* Resume text extraction
-* AI resume analysis
-* Editable skills
-* Editable employment history
-* Editable education history
-* Frontend integration
-* Automated tests
-* Deployment configuration
-
----
-
-## Current Development Priority
-
-The current priority is to finish and verify career recommendation responses, especially BLS-related fields.
-
-The expected work includes:
-
-* Returning BLS status in each recommendation response.
-* Selecting all required BLS fields in Prisma queries.
-* Keeping recommendation response formats consistent.
-* Testing recommendation routes.
-* Confirming routes still work when BLS data is missing.
-* Creating logical Git commits after successful testing.
-
-The exact route files and endpoint paths must be confirmed from the repository.
-
----
-
 ## Documentation Maintenance
 
 Update this file only when stable project information changes.
@@ -569,3 +504,274 @@ Examples:
 * New permanent development rules
 
 Use `SESSION.md` for day-to-day progress and unfinished work.
+
+## AI Design Philosophy
+
+Artificial intelligence is used to interpret, reason about, and personalize career guidance.
+
+AI should **not** be the primary source of factual occupational information when trusted structured data already exists.
+
+Whenever possible, career information should come from authoritative external sources such as:
+
+- O*NET
+- Bureau of Labor Statistics (BLS)
+- Per Scholas data
+- User-provided information
+
+AI is primarily responsible for:
+
+- Resume interpretation
+- Career matching
+- Skill-gap analysis
+- Resume optimization
+- Recommendation ranking
+- Personalized explanations
+- Career coaching
+
+AI should avoid inventing factual occupational data that is available from trusted sources.
+
+## External Data Priority
+
+Whenever multiple sources are available, use the following priority:
+
+1. Cached application database
+2. Bureau of Labor Statistics (BLS)
+3. O*NET
+4. AI reasoning
+
+Examples:
+
+- Salary should come from BLS whenever possible.
+- Occupation descriptions should come from O*NET.
+- AI should explain or interpret the data rather than replacing it.
+
+## Backend Responsibilities
+
+The backend is responsible for:
+
+- Authentication
+- AI communication
+- Resume parsing
+- Career recommendation generation
+- External API integration
+- Data persistence
+- Business rules
+- Response formatting
+- Caching external data
+
+The frontend should not communicate directly with:
+
+- Gemini
+- O*NET
+- Bureau of Labor Statistics
+
+The frontend should communicate only with backend REST endpoints.
+
+## Career Recommendation Pipeline
+
+The intended recommendation pipeline is:
+
+Upload Resume
+
+↓
+
+Extract Resume Text
+
+↓
+
+Analyze Resume with AI
+
+↓
+
+Store Structured Resume Data
+
+↓
+
+Load Career Catalog
+
+↓
+
+Select Candidate Careers
+
+↓
+
+AI Determines Best Career Matches
+
+↓
+
+Store Career Recommendations
+
+↓
+
+Display Recommended Careers
+
+↓
+
+User Selects Career
+
+↓
+
+Generate Resume Optimization
+
+↓
+
+Generate Readiness Report
+
+↓
+
+Build Personalized Roadmap
+
+## Current Core Database Models
+
+The application currently revolves around the following primary models.
+
+Always verify the Prisma schema before assuming field names.
+
+Core models include:
+
+- User
+- Resume
+- ResumeAnalysis
+- Skill
+- EmploymentHistory
+- Education
+- CareerRole
+- RoleRecommendation
+- ResumeOptimization
+- ReadinessReport
+- Roadmap
+- Milestone
+
+## External Data Cache Strategy
+
+External API requests should be minimized whenever practical.
+
+Current strategy:
+
+- Store retrieved BLS data inside CareerRole.
+- Reuse cached values whenever they remain fresh.
+- Refresh stale data automatically.
+- Do not repeatedly call external services for identical information.
+
+Current cache policy:
+
+- BLS salary data: approximately 30 days
+
+When cache expires:
+
+1. Request updated data.
+2. Update CareerRole.
+3. Return refreshed information to the client.
+
+The application should continue functioning even when external services are temporarily unavailable.
+
+## Primary User Workflow
+
+The intended user experience is:
+
+Register or Login
+
+↓
+
+Upload Resume
+
+↓
+
+Analyze Resume
+
+↓
+
+Review Extracted Information
+
+↓
+
+Generate Career Recommendations
+
+↓
+
+Review Recommended Careers
+
+↓
+
+Select Target Career
+
+↓
+
+Optimize Resume
+
+↓
+
+Review Readiness Report
+
+↓
+
+Follow Personalized Career Roadmap
+
+## Current Backend Structure
+
+The backend currently has the following structure:
+
+```text
+backend/
+├── config/
+├── data/
+├── prisma/
+├── routes/
+├── scripts/
+├── services/
+├── uploads/
+├── utils/
+├── .env
+├── .env.example
+├── package.json
+├── prisma.config.ts
+├── PROJECT.md
+└── server.js
+```
+
+Notes:
+
+- `config/` contains application configuration.
+- `data/` contains application data files and datasets.
+- `prisma/` contains the Prisma schema and migrations.
+- `routes/` contains Express route definitions.
+- `scripts/` contains import and maintenance scripts.
+- `services/` contains business logic and external API integrations.
+- `uploads/` stores uploaded résumé files.
+- `utils/` contains shared helper functions.
+
+Future folders may be added as the project grows, but existing folders should not be renamed or reorganized without a specific reason.
+
+## Important Configuration Files
+
+The following files are considered core project configuration and should be inspected before making architectural changes:
+
+```text
+package.json
+server.js
+prisma/schema.prisma
+prisma.config.ts
+.env.example
+PROJECT.md
+SESSION.md
+```
+
+These files should be treated as authoritative before creating new configuration.
+
+
+## AI Assistant Guidelines
+
+When assisting with this project:
+
+- Read PROJECT.md.
+- Read SESSION.md.
+- Inspect the relevant repository files before suggesting changes.
+- Treat the repository as the source of truth.
+- Preserve existing comments unless requested otherwise.
+- Prefer complete corrected files when requested.
+- Suggest small, logical Git commits.
+- Explain testing steps before considering work complete.
+- Create reminders to update PROJECT.md and SESSION.md files.
+- Suggest updates to this document when necessary.
+- Suggest updates to Open API 3.1 document.
+- Remind me when I should be in the /server folder and not. Make it very clear so I don't overlook it.
