@@ -957,6 +957,219 @@ router.post(
   }
 );
 
+// PATCH /api/resumes/:resumeId/recommendations/:recommendationId/select
+router.patch(
+  "/:resumeId/recommendations/:recommendationId/select",
+  authMiddleware,
+  async (req, res) => {
+    const resumeId = Number(req.params.resumeId);
+    const recommendationId = Number(
+      req.params.recommendationId
+    );
+
+    if (!Number.isInteger(resumeId) || resumeId <= 0) {
+      return res.status(400).json({
+        message: "A valid résumé ID is required.",
+      });
+    }
+
+    if (
+      !Number.isInteger(recommendationId) ||
+      recommendationId <= 0
+    ) {
+      return res.status(400).json({
+        message:
+          "A valid recommendation ID is required.",
+      });
+    }
+
+    try {
+      // Confirm that the résumé belongs to the logged-in user.
+      const resume = await prisma.resume.findFirst({
+        where: {
+          id: resumeId,
+          userId: req.user.id,
+        },
+
+        select: {
+          id: true,
+          originalFileName: true,
+        },
+      });
+
+      if (!resume) {
+        return res.status(404).json({
+          message: "Résumé not found.",
+        });
+      }
+
+      // Confirm that the recommendation belongs to this résumé.
+      const recommendation =
+        await prisma.roleRecommendation.findFirst({
+          where: {
+            id: recommendationId,
+            resumeId,
+          },
+
+          include: {
+            careerRole: true,
+          },
+        });
+
+      if (!recommendation) {
+        return res.status(404).json({
+          message:
+            "Career recommendation not found for this résumé.",
+        });
+      }
+
+      const selectedRecommendation =
+        await prisma.$transaction(
+          async (transaction) => {
+            // Clear any previously selected recommendation
+            // for this résumé.
+            await transaction.roleRecommendation.updateMany({
+              where: {
+                resumeId,
+                selected: true,
+              },
+
+              data: {
+                selected: false,
+              },
+            });
+
+            // Select the requested recommendation.
+            return transaction.roleRecommendation.update({
+              where: {
+                id: recommendationId,
+              },
+
+              data: {
+                selected: true,
+              },
+
+              include: {
+                careerRole: true,
+              },
+            });
+          }
+        );
+
+      return res.json({
+        message: "Career selected successfully.",
+
+        resume: {
+          id: resume.id,
+          originalFileName: resume.originalFileName,
+        },
+
+        recommendation: {
+          recommendationId:
+            selectedRecommendation.id,
+
+          rank: selectedRecommendation.rank,
+
+          matchScore:
+            selectedRecommendation.matchScore,
+
+          reason: selectedRecommendation.reason,
+
+          selected: selectedRecommendation.selected,
+
+          matchedSkills: JSON.parse(
+            selectedRecommendation.matchedSkillsJson ||
+              "[]"
+          ),
+
+          missingSkills: JSON.parse(
+            selectedRecommendation.missingSkillsJson ||
+              "[]"
+          ),
+
+          career: {
+            id: selectedRecommendation.careerRole.id,
+
+            onetSocCode:
+              selectedRecommendation.careerRole
+                .onetSocCode,
+
+            blsOccupationCode:
+              selectedRecommendation.careerRole
+                .blsOccupationCode,
+
+            title:
+              selectedRecommendation.careerRole.title,
+
+            description:
+              selectedRecommendation.careerRole
+                .description,
+
+            lucideIcon:
+              selectedRecommendation.careerRole
+                .lucideIcon,
+
+            salary: {
+              minimum:
+                selectedRecommendation.careerRole
+                  .salaryMin,
+
+              maximum:
+                selectedRecommendation.careerRole
+                  .salaryMax,
+
+              source:
+                selectedRecommendation.careerRole
+                  .wageSource,
+
+              updatedAt:
+                selectedRecommendation.careerRole
+                  .blsDataUpdatedAt,
+            },
+
+            employmentGrowthPercent:
+              selectedRecommendation.careerRole
+                .employmentGrowthPercent,
+
+            jobOutlook:
+              selectedRecommendation.careerRole
+                .jobOutlook ||
+              getJobOutlook(
+                selectedRecommendation.careerRole
+                  .employmentGrowthPercent
+              ),
+
+            targetScore:
+              selectedRecommendation.careerRole
+                .targetScore,
+
+            sources: {
+              occupation:
+                selectedRecommendation.careerRole
+                  .occupationSource,
+
+              wages:
+                selectedRecommendation.careerRole
+                  .wageSource,
+            },
+          },
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Unable to select career recommendation:",
+        error
+      );
+
+      return res.status(500).json({
+        message:
+          "Unable to select career recommendation.",
+        error: error.message,
+      });
+    }
+  }
+);
+
 // GET /api/resumes/:resumeId/recommendations
 router.get(
   "/:resumeId/recommendations",
