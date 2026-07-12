@@ -1404,6 +1404,7 @@ router.get(
   }
 );
 
+
 // POST /api/resumes/:resumeId/optimization
 router.post(
   "/:resumeId/optimization",
@@ -1805,7 +1806,599 @@ router.post(
   }
 );
 
+// POST /api/resumes/:resumeId/readiness-report
+router.post(
+  "/:resumeId/readiness-report",
+  authMiddleware,
+  async (req, res) => {
+    const resumeId = Number(req.params.resumeId);
 
+    if (!Number.isInteger(resumeId) || resumeId <= 0) {
+      return res.status(400).json({
+        message: "A valid résumé ID is required.",
+      });
+    }
+
+    try {
+      const resume = await prisma.resume.findFirst({
+        where: {
+          id: resumeId,
+          userId: req.user.id,
+        },
+
+        select: {
+          id: true,
+          originalFileName: true,
+        },
+      });
+
+      if (!resume) {
+        return res.status(404).json({
+          message: "Résumé not found.",
+        });
+      }
+
+      const selectedRecommendation =
+        await prisma.roleRecommendation.findFirst({
+          where: {
+            resumeId,
+            selected: true,
+          },
+
+          include: {
+            careerRole: true,
+          },
+        });
+
+      if (!selectedRecommendation) {
+        return res.status(409).json({
+          message:
+            "A career recommendation must be selected before a readiness report can be generated.",
+        });
+      }
+
+      const optimization =
+        await prisma.resumeOptimization.findUnique({
+          where: {
+            resumeId_careerRoleId: {
+              resumeId,
+              careerRoleId:
+                selectedRecommendation.careerRoleId,
+            },
+          },
+
+          include: {
+            suggestions: {
+              orderBy: {
+                order: "asc",
+              },
+            },
+          },
+        });
+
+      if (!optimization) {
+        return res.status(409).json({
+          message:
+            "Résumé optimization must be completed before a readiness report can be generated.",
+        });
+      }
+
+      const parseSuggestion = (action) => {
+        const value = String(action || "").trim();
+        const separatorIndex = value.indexOf(":");
+
+        if (separatorIndex > 0) {
+          return {
+            title: value
+              .slice(0, separatorIndex)
+              .trim(),
+
+            description: value
+              .slice(separatorIndex + 1)
+              .trim(),
+          };
+        }
+
+        return {
+          title: value || "Complete résumé improvement",
+          description:
+            "Complete this recommended résumé improvement.",
+        };
+      };
+
+      const firstIncompleteSuggestion =
+        optimization.suggestions.find(
+          (suggestion) => !suggestion.completed
+        );
+
+      const parsedNextStep = firstIncompleteSuggestion
+        ? parseSuggestion(
+            firstIncompleteSuggestion.action
+          )
+        : null;
+
+      const reachedTarget =
+        optimization.matchScore >=
+        optimization.targetScore;
+
+      const savedReport = await prisma.$transaction(
+        async (transaction) => {
+          const report =
+            await transaction.readinessReport.upsert({
+              where: {
+                resumeOptimizationId:
+                  optimization.id,
+              },
+
+              update: {
+                userId: req.user.id,
+
+                careerRoleId:
+                  selectedRecommendation.careerRoleId,
+
+                readinessScore:
+                  optimization.matchScore,
+
+                previousScore:
+                  optimization.previousMatchScore,
+
+                targetScore:
+                  optimization.targetScore,
+
+                percentile: null,
+
+                nextStepTitle: reachedTarget
+                  ? "Maintain career readiness"
+                  : parsedNextStep?.title ||
+                    "Review résumé optimization",
+
+                nextStepDescription: reachedTarget
+                  ? "Your résumé meets the current target score. Continue refining it as you gain experience."
+                  : parsedNextStep?.description ||
+                    "Review the recommended résumé improvements and complete the next action.",
+
+                nextStepActionLabel:
+                  "Review optimization",
+
+                nextStepActionRoute: null,
+
+                generatedAt: new Date(),
+              },
+
+              create: {
+                userId: req.user.id,
+
+                careerRoleId:
+                  selectedRecommendation.careerRoleId,
+
+                resumeOptimizationId:
+                  optimization.id,
+
+                readinessScore:
+                  optimization.matchScore,
+
+                previousScore:
+                  optimization.previousMatchScore,
+
+                targetScore:
+                  optimization.targetScore,
+
+                percentile: null,
+
+                nextStepTitle: reachedTarget
+                  ? "Maintain career readiness"
+                  : parsedNextStep?.title ||
+                    "Review résumé optimization",
+
+                nextStepDescription: reachedTarget
+                  ? "Your résumé meets the current target score. Continue refining it as you gain experience."
+                  : parsedNextStep?.description ||
+                    "Review the recommended résumé improvements and complete the next action.",
+
+                nextStepActionLabel:
+                  "Review optimization",
+
+                nextStepActionRoute: null,
+
+                generatedAt: new Date(),
+              },
+            });
+
+          await transaction.milestone.deleteMany({
+            where: {
+              reportId: report.id,
+            },
+          });
+
+          await transaction.actionItem.deleteMany({
+            where: {
+              reportId: report.id,
+            },
+          });
+
+          const milestones = [
+            {
+              title: "Résumé analyzed",
+              status: "COMPLETED",
+              completed: true,
+              order: 1,
+            },
+            {
+              title: "Career selected",
+              status: "COMPLETED",
+              completed: true,
+              order: 2,
+            },
+            {
+              title: "Résumé optimization completed",
+              status: "COMPLETED",
+              completed: true,
+              order: 3,
+            },
+            {
+              title: "Reach target match score",
+              status: reachedTarget
+                ? "COMPLETED"
+                : "ACTIVE",
+              completed: reachedTarget,
+              order: 4,
+            },
+          ];
+
+          await transaction.milestone.createMany({
+            data: milestones.map((milestone) => ({
+              ...milestone,
+              userId: req.user.id,
+              reportId: report.id,
+            })),
+          });
+
+          if (optimization.suggestions.length > 0) {
+            await transaction.actionItem.createMany({
+              data: optimization.suggestions.map(
+                (suggestion, index) => {
+                  const parsedSuggestion =
+                    parseSuggestion(
+                      suggestion.action
+                    );
+
+                  return {
+                    reportId: report.id,
+                    lucideIcon: "FileCheck2",
+                    type: "RESUME",
+                    title: parsedSuggestion.title,
+                    description:
+                      parsedSuggestion.description,
+                    actionRoute: null,
+                    completed:
+                      suggestion.completed,
+                    order:
+                      suggestion.order ||
+                      index + 1,
+                  };
+                }
+              ),
+            });
+          }
+
+          return transaction.readinessReport.findUnique({
+            where: {
+              id: report.id,
+            },
+
+            include: {
+              careerRole: true,
+
+              milestones: {
+                orderBy: {
+                  order: "asc",
+                },
+              },
+
+              actionItems: {
+                orderBy: {
+                  order: "asc",
+                },
+              },
+            },
+          });
+        }
+      );
+
+      return res.status(201).json({
+        message:
+          "Readiness report generated successfully.",
+
+        readinessReport: {
+          reportId: savedReport.id,
+
+          resumeId: resume.id,
+
+          resumeTitle:
+            resume.originalFileName,
+
+          readinessScore:
+            savedReport.readinessScore,
+
+          previousScore:
+            savedReport.previousScore,
+
+          targetScore:
+            savedReport.targetScore,
+
+          percentile:
+            savedReport.percentile,
+
+          careerChoice: {
+            careerRoleId:
+              savedReport.careerRole.id,
+
+            title:
+              savedReport.careerRole.title,
+
+            lucideIcon:
+              savedReport.careerRole
+                .lucideIcon,
+          },
+
+          nextStep: {
+            title:
+              savedReport.nextStepTitle,
+
+            description:
+              savedReport.nextStepDescription,
+
+            actionLabel:
+              savedReport.nextStepActionLabel,
+
+            actionRoute:
+              savedReport.nextStepActionRoute,
+          },
+
+          personalizedActionList:
+            savedReport.actionItems.map(
+              (item) => ({
+                actionItemId: item.id,
+                lucideIcon: item.lucideIcon,
+                type: item.type,
+                title: item.title,
+                description: item.description,
+                actionRoute: item.actionRoute,
+                completed: item.completed,
+                order: item.order,
+              })
+            ),
+
+          milestones:
+            savedReport.milestones.map(
+              (milestone) => ({
+                milestoneId: milestone.id,
+                title: milestone.title,
+                status: milestone.status,
+                completed: milestone.completed,
+                order: milestone.order,
+              })
+            ),
+
+          generatedAt:
+            savedReport.generatedAt,
+
+          updatedAt:
+            savedReport.updatedAt,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Unable to generate readiness report:",
+        error
+      );
+
+      return res.status(500).json({
+        message:
+          "Unable to generate readiness report.",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// GET /api/resumes/:resumeId/readiness-report
+router.get(
+  "/:resumeId/readiness-report",
+  authMiddleware,
+  async (req, res) => {
+    const resumeId = Number(req.params.resumeId);
+
+    if (!Number.isInteger(resumeId) || resumeId <= 0) {
+      return res.status(400).json({
+        message: "A valid résumé ID is required.",
+      });
+    }
+
+    try {
+      const resume = await prisma.resume.findFirst({
+        where: {
+          id: resumeId,
+          userId: req.user.id,
+        },
+
+        select: {
+          id: true,
+          originalFileName: true,
+        },
+      });
+
+      if (!resume) {
+        return res.status(404).json({
+          message: "Résumé not found.",
+        });
+      }
+
+      const selectedRecommendation =
+        await prisma.roleRecommendation.findFirst({
+          where: {
+            resumeId,
+            selected: true,
+          },
+
+          select: {
+            careerRoleId: true,
+          },
+        });
+
+      if (!selectedRecommendation) {
+        return res.status(404).json({
+          message:
+            "No selected career recommendation was found for this résumé.",
+        });
+      }
+
+      const optimization =
+        await prisma.resumeOptimization.findUnique({
+          where: {
+            resumeId_careerRoleId: {
+              resumeId,
+              careerRoleId:
+                selectedRecommendation.careerRoleId,
+            },
+          },
+
+          select: {
+            id: true,
+          },
+        });
+
+      if (!optimization) {
+        return res.status(404).json({
+          message:
+            "Résumé optimization has not been generated yet.",
+        });
+      }
+
+      const report =
+        await prisma.readinessReport.findUnique({
+          where: {
+            resumeOptimizationId:
+              optimization.id,
+          },
+
+          include: {
+            careerRole: true,
+
+            milestones: {
+              orderBy: {
+                order: "asc",
+              },
+            },
+
+            actionItems: {
+              orderBy: {
+                order: "asc",
+              },
+            },
+          },
+        });
+
+      if (!report) {
+        return res.status(404).json({
+          message:
+            "Readiness report has not been generated yet.",
+        });
+      }
+
+      return res.json({
+        readinessReport: {
+          reportId: report.id,
+
+          resumeId: resume.id,
+
+          resumeTitle:
+            resume.originalFileName,
+
+          readinessScore:
+            report.readinessScore,
+
+          previousScore:
+            report.previousScore,
+
+          targetScore:
+            report.targetScore,
+
+          percentile:
+            report.percentile,
+
+          careerChoice: {
+            careerRoleId:
+              report.careerRole.id,
+
+            title:
+              report.careerRole.title,
+
+            lucideIcon:
+              report.careerRole
+                .lucideIcon,
+          },
+
+          nextStep: {
+            title:
+              report.nextStepTitle,
+
+            description:
+              report.nextStepDescription,
+
+            actionLabel:
+              report.nextStepActionLabel,
+
+            actionRoute:
+              report.nextStepActionRoute,
+          },
+
+          personalizedActionList:
+            report.actionItems.map(
+              (item) => ({
+                actionItemId: item.id,
+                lucideIcon: item.lucideIcon,
+                type: item.type,
+                title: item.title,
+                description: item.description,
+                actionRoute: item.actionRoute,
+                completed: item.completed,
+                order: item.order,
+              })
+            ),
+
+          milestones:
+            report.milestones.map(
+              (milestone) => ({
+                milestoneId: milestone.id,
+                title: milestone.title,
+                status: milestone.status,
+                completed: milestone.completed,
+                order: milestone.order,
+              })
+            ),
+
+          generatedAt:
+            report.generatedAt,
+
+          updatedAt:
+            report.updatedAt,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Unable to retrieve readiness report:",
+        error
+      );
+
+      return res.status(500).json({
+        message:
+          "Unable to retrieve readiness report.",
+        error: error.message,
+      });
+    }
+  }
+);
 
 // GET /api/resumes/:resumeId/raw-text
 router.get(
