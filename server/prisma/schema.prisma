@@ -219,6 +219,11 @@ model CareerRole {
   // BLS cache tracking
   blsDataUpdatedAt DateTime?
 
+  // BLS lookup tracking
+  blsLookupAttempted   Boolean   @default(false)
+  blsLookupAttemptedAt DateTime?
+  blsLookupError       String?
+
   requiredSkills   RoleSkill[]
   recommendations  RoleRecommendation[]
   optimizations    ResumeOptimization[]
