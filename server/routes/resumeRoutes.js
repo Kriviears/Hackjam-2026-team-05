@@ -1805,183 +1805,7 @@ router.post(
   }
 );
 
-// GET /api/resumes/:resumeId/optimization
-router.get(
-  "/:resumeId/optimization",
-  authMiddleware,
-  async (req, res) => {
-    const resumeId = Number(req.params.resumeId);
 
-    if (!Number.isInteger(resumeId) || resumeId <= 0) {
-      return res.status(400).json({
-        message: "A valid résumé ID is required.",
-      });
-    }
-
-    try {
-      // Confirm that the résumé belongs to the authenticated user.
-      const resume = await prisma.resume.findFirst({
-        where: {
-          id: resumeId,
-          userId: req.user.id,
-        },
-
-        select: {
-          id: true,
-          originalFileName: true,
-          uploadedAt: true,
-
-          skills: {
-            orderBy: {
-              name: "asc",
-            },
-
-            select: {
-              name: true,
-            },
-          },
-        },
-      });
-
-      if (!resume) {
-        return res.status(404).json({
-          message: "Résumé not found.",
-        });
-      }
-
-      // The selected recommendation identifies the user's
-      // current target career for this résumé.
-      const selectedRecommendation =
-        await prisma.roleRecommendation.findFirst({
-          where: {
-            resumeId,
-            selected: true,
-          },
-
-          select: {
-            careerRoleId: true,
-          },
-        });
-
-      if (!selectedRecommendation) {
-        return res.status(404).json({
-          message:
-            "No selected career recommendation was found for this résumé.",
-        });
-      }
-
-      const optimization =
-        await prisma.resumeOptimization.findUnique({
-          where: {
-            resumeId_careerRoleId: {
-              resumeId,
-              careerRoleId:
-                selectedRecommendation.careerRoleId,
-            },
-          },
-
-          include: {
-            careerRole: true,
-
-            keywords: {
-              orderBy: {
-                id: "asc",
-              },
-            },
-
-            suggestions: {
-              orderBy: {
-                order: "asc",
-              },
-            },
-          },
-        });
-
-      if (!optimization) {
-        return res.status(404).json({
-          message:
-            "Résumé optimization has not been generated for the selected career.",
-        });
-      }
-
-      return res.json({
-        optimization: {
-          optimizationId: optimization.id,
-
-          resumeId: resume.id,
-
-          resumeTitle: resume.originalFileName,
-
-          resumeUploadDate: resume.uploadedAt,
-
-          matchScore: optimization.matchScore,
-
-          previousMatchScore:
-            optimization.previousMatchScore,
-
-          targetScore: optimization.targetScore,
-
-          status: optimization.status,
-
-          careerChoice: {
-            careerRoleId: optimization.careerRole.id,
-
-            title: optimization.careerRole.title,
-
-            onetSocCode:
-              optimization.careerRole.onetSocCode,
-
-            lucideIcon:
-              optimization.careerRole.lucideIcon,
-          },
-
-          skills: resume.skills.map(
-            (skill) => skill.name
-          ),
-
-          matchedKeywords: optimization.keywords
-            .filter(
-              (keyword) =>
-                keyword.status === "MATCHED"
-            )
-            .map((keyword) => keyword.keyword),
-
-          missingKeywords: optimization.keywords
-            .filter(
-              (keyword) =>
-                keyword.status === "MISSING"
-            )
-            .map((keyword) => keyword.keyword),
-
-          suggestedActions:
-            optimization.suggestions.map(
-              (suggestion) => ({
-                suggestionId: suggestion.id,
-
-                action: suggestion.action,
-
-                completed: suggestion.completed,
-
-                order: suggestion.order,
-              })
-            ),
-        },
-      });
-    } catch (error) {
-      console.error(
-        "Unable to retrieve résumé optimization:",
-        error
-      );
-
-      return res.status(500).json({
-        message:
-          "Unable to retrieve résumé optimization.",
-
-        error: error.message,
-      });
-    }
-  }
-);
 
 // GET /api/resumes/:resumeId/raw-text
 router.get(
@@ -2040,6 +1864,185 @@ router.get(
       return res.status(500).json({
         message:
           "Unable to retrieve raw résumé text.",
+      });
+    }
+  }
+);
+
+// GET /api/resumes/:resumeId/optimization
+router.get(
+  "/:resumeId/optimization",
+  authMiddleware,
+  async (req, res) => {
+    const resumeId = Number(req.params.resumeId);
+
+    if (!Number.isInteger(resumeId) || resumeId <= 0) {
+      return res.status(400).json({
+        message: "A valid résumé ID is required.",
+      });
+    }
+
+    try {
+      const resume = await prisma.resume.findFirst({
+        where: {
+          id: resumeId,
+          userId: req.user.id,
+        },
+
+        select: {
+          id: true,
+          originalFileName: true,
+          uploadedAt: true,
+
+          skills: {
+            select: {
+              name: true,
+            },
+
+            orderBy: {
+              name: "asc",
+            },
+          },
+        },
+      });
+
+      if (!resume) {
+        return res.status(404).json({
+          message: "Résumé not found.",
+        });
+      }
+
+      const selectedRecommendation =
+        await prisma.roleRecommendation.findFirst({
+          where: {
+            resumeId,
+            selected: true,
+          },
+
+          select: {
+            careerRoleId: true,
+          },
+        });
+
+      if (!selectedRecommendation) {
+        return res.status(404).json({
+          message:
+            "No selected career recommendation was found for this résumé.",
+        });
+      }
+
+      const optimization =
+        await prisma.resumeOptimization.findUnique({
+          where: {
+            resumeId_careerRoleId: {
+              resumeId,
+              careerRoleId:
+                selectedRecommendation.careerRoleId,
+            },
+          },
+
+          include: {
+            careerRole: true,
+
+            keywords: {
+              orderBy: {
+                id: "asc",
+              },
+            },
+
+            suggestions: {
+              orderBy: {
+                order: "asc",
+              },
+            },
+          },
+        });
+
+      if (!optimization) {
+        return res.status(404).json({
+          message:
+            "Résumé optimization has not been generated yet.",
+        });
+      }
+
+      return res.json({
+        optimization: {
+          optimizationId: optimization.id,
+
+          resumeId: resume.id,
+
+          resumeTitle: resume.originalFileName,
+
+          resumeUploadDate: resume.uploadedAt,
+
+          matchScore: optimization.matchScore,
+
+          previousMatchScore:
+            optimization.previousMatchScore,
+
+          targetScore: optimization.targetScore,
+
+          status: optimization.status,
+
+          careerChoice: {
+            careerRoleId:
+              optimization.careerRole.id,
+
+            title:
+              optimization.careerRole.title,
+
+            onetSocCode:
+              optimization.careerRole.onetSocCode,
+
+            lucideIcon:
+              optimization.careerRole.lucideIcon,
+          },
+
+          skills: resume.skills.map(
+            (skill) => skill.name
+          ),
+
+          matchedKeywords:
+            optimization.keywords
+              .filter(
+                (keyword) =>
+                  keyword.status === "MATCHED"
+              )
+              .map(
+                (keyword) => keyword.keyword
+              ),
+
+          missingKeywords:
+            optimization.keywords
+              .filter(
+                (keyword) =>
+                  keyword.status === "MISSING"
+              )
+              .map(
+                (keyword) => keyword.keyword
+              ),
+
+          suggestedActions:
+            optimization.suggestions.map(
+              (suggestion) => ({
+                suggestionId: suggestion.id,
+                action: suggestion.action,
+                completed: suggestion.completed,
+                order: suggestion.order,
+              })
+            ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Unable to retrieve résumé optimization:",
+        error
+      );
+
+      return res.status(500).json({
+        message:
+          "Unable to retrieve résumé optimization.",
+        error: error.message,
       });
     }
   }
