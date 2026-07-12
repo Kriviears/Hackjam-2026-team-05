@@ -498,13 +498,13 @@ router.get(
 
         analysis: resume.analysis
           ? {
-              id: resume.analysis.id,
-              analysisStatus: resume.analysis.analysisStatus,
-              professionalSummary:
-                resume.analysis.professionalSummary,
-              analysisError: resume.analysis.analysisError,
-              analyzedAt: resume.analysis.analyzedAt,
-            }
+            id: resume.analysis.id,
+            analysisStatus: resume.analysis.analysisStatus,
+            professionalSummary:
+              resume.analysis.professionalSummary,
+            analysisError: resume.analysis.analysisError,
+            analyzedAt: resume.analysis.analyzedAt,
+          }
           : null,
 
         skills: resume.skills.map((skill) => ({
@@ -550,6 +550,162 @@ router.get(
 
       return res.status(500).json({
         message: "Unable to retrieve résumé analysis.",
+      });
+    }
+  }
+);
+
+// GET /api/resumes/:resumeId/recommendations
+router.get(
+  "/:resumeId/recommendations",
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const resumeId = Number(req.params.resumeId);
+
+      if (!Number.isInteger(resumeId)) {
+        return res.status(400).json({
+          message: "A valid résumé ID is required.",
+        });
+      }
+
+      // Confirm that the résumé belongs to the logged-in user.
+      const resume = await prisma.resume.findFirst({
+        where: {
+          id: resumeId,
+          userId: req.user.id,
+        },
+        select: {
+          id: true,
+          originalFileName: true,
+        },
+      });
+
+      if (!resume) {
+        return res.status(404).json({
+          message: "Résumé not found.",
+        });
+      }
+
+      // Retrieve the saved, résumé-specific career recommendations.
+      const recommendations =
+        await prisma.roleRecommendation.findMany({
+          where: {
+            resumeId,
+          },
+
+          orderBy: [
+            {
+              rank: "asc",
+            },
+            {
+              matchScore: "desc",
+            },
+          ],
+
+          include: {
+            careerRole: {
+              select: {
+                id: true,
+                onetSocCode: true,
+                blsOccupationCode: true,
+                title: true,
+                description: true,
+                lucideIcon: true,
+                salaryMin: true,
+                salaryMax: true,
+                employmentGrowthPercent: true,
+                jobOutlook: true,
+                targetScore: true,
+                occupationSource: true,
+                wageSource: true,
+                blsDataUpdatedAt: true,
+              },
+            },
+          },
+        });
+
+      const formattedRecommendations =
+        recommendations.map((recommendation) => ({
+          recommendationId: recommendation.id,
+          rank: recommendation.rank,
+          matchScore: recommendation.matchScore,
+          reason: recommendation.reason,
+          selected: recommendation.selected,
+
+          career: {
+            id: recommendation.careerRole.id,
+
+            onetSocCode:
+              recommendation.careerRole.onetSocCode,
+
+            blsOccupationCode:
+              recommendation.careerRole
+                .blsOccupationCode,
+
+            title: recommendation.careerRole.title,
+
+            description:
+              recommendation.careerRole.description,
+
+            lucideIcon:
+              recommendation.careerRole.lucideIcon,
+
+            salary: {
+              minimum:
+                recommendation.careerRole.salaryMin,
+
+              maximum:
+                recommendation.careerRole.salaryMax,
+
+              source:
+                recommendation.careerRole.wageSource,
+
+              updatedAt:
+                recommendation.careerRole
+                  .blsDataUpdatedAt,
+            },
+
+            employmentGrowthPercent:
+              recommendation.careerRole
+                .employmentGrowthPercent,
+
+            jobOutlook:
+              recommendation.careerRole.jobOutlook,
+
+            targetScore:
+              recommendation.careerRole.targetScore,
+
+            sources: {
+              occupation:
+                recommendation.careerRole
+                  .occupationSource,
+
+              wages:
+                recommendation.careerRole.wageSource,
+            },
+          },
+        }));
+
+      return res.json({
+        resume: {
+          id: resume.id,
+          originalFileName: resume.originalFileName,
+        },
+
+        count: formattedRecommendations.length,
+
+        recommendations: formattedRecommendations,
+      });
+    } catch (error) {
+      console.error(
+        "Unable to retrieve career recommendations:",
+        error
+      );
+
+      return res.status(500).json({
+        message:
+          "Unable to retrieve career recommendations.",
       });
     }
   }
