@@ -246,15 +246,20 @@ model RoleSkill {
 }
 
 model RoleRecommendation {
-  id           Int      @id @default(autoincrement())
+  id           Int     @id @default(autoincrement())
   resumeId     Int
   careerRoleId Int
   matchScore   Int
   reason       String?
   rank         Int?
-  selected     Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  selected     Boolean @default(false)
+
+  // Résumé-specific skill comparison returned by AI.
+  matchedSkillsJson String?
+  missingSkillsJson String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   resume     Resume     @relation(fields: [resumeId], references: [id], onDelete: Cascade)
   careerRole CareerRole @relation(fields: [careerRoleId], references: [id], onDelete: Cascade)

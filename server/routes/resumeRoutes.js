@@ -18,6 +18,11 @@ const {
   analyzeResume,
 } = require("../services/ai/resumeAnalyzer");
 
+const {
+  selectCareerCandidates,
+  generateCareerRecommendations,
+} = require("../services/ai/careerRecommendationService");
+
 // DATABASE
 const adapter = new PrismaBetterSqlite3({
   url: process.env.DATABASE_URL || "file:./dev.db",
@@ -555,6 +560,282 @@ router.get(
   }
 );
 
+// POST /api/resumes/:resumeId/recommendations
+router.post(
+  "/:resumeId/recommendations",
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const resumeId = Number(req.params.resumeId);
+
+      if (!Number.isInteger(resumeId)) {
+        return res.status(400).json({
+          message: "A valid résumé ID is required.",
+        });
+      }
+
+      // Load the résumé and all structured résumé data.
+      const resume = await prisma.resume.findFirst({
+        where: {
+          id: resumeId,
+          userId: req.user.id,
+        },
+        include: {
+          analysis: true,
+          skills: true,
+          employmentHistory: true,
+          education: true,
+        },
+      });
+
+      if (!resume) {
+        return res.status(404).json({
+          message: "Résumé not found.",
+        });
+      }
+
+      if (
+        resume.analysis?.analysisStatus !== "COMPLETED"
+      ) {
+        return res.status(409).json({
+          message:
+            "The résumé must be analyzed before career recommendations can be generated.",
+        });
+      }
+
+      if (resume.skills.length === 0) {
+        return res.status(409).json({
+          message:
+            "No résumé skills are available for career matching.",
+        });
+      }
+
+      // Load the O*NET-backed career catalog.
+      const careerRoles =
+        await prisma.careerRole.findMany({
+          select: {
+            id: true,
+            onetSocCode: true,
+            title: true,
+            description: true,
+          },
+          orderBy: {
+            id: "asc",
+          },
+        });
+
+      if (careerRoles.length === 0) {
+        return res.status(409).json({
+          message:
+            "The career catalog has not been loaded.",
+        });
+      }
+
+      const resumeProfile = {
+        professionalSummary:
+          resume.analysis.professionalSummary,
+
+        skills: resume.skills,
+
+        employmentHistory:
+          resume.employmentHistory,
+
+        education: resume.education,
+      };
+
+      // Narrow the full career catalog before asking AI
+      // to perform the final ranking.
+      const careerCandidates =
+        selectCareerCandidates(
+          careerRoles,
+          resumeProfile,
+          60
+        );
+
+      const generatedRecommendations =
+        await generateCareerRecommendations(
+          resumeProfile,
+          careerCandidates,
+          5
+        );
+
+      const recommendedCareerIds =
+        generatedRecommendations.map(
+          (recommendation) =>
+            recommendation.careerRoleId
+        );
+
+      const savedRecommendations =
+        await prisma.$transaction(
+          async (transaction) => {
+            // Re-running recommendation generation replaces
+            // the previous recommendation set for this résumé.
+            await transaction.roleRecommendation.deleteMany({
+              where: {
+                resumeId,
+              },
+            });
+
+            for (
+              const recommendation of
+              generatedRecommendations
+            ) {
+              await transaction.roleRecommendation.create({
+                data: {
+                  resumeId,
+                  careerRoleId:
+                    recommendation.careerRoleId,
+
+                  matchScore:
+                    recommendation.matchScore,
+
+                  reason:
+                    recommendation.reason,
+
+                  rank:
+                    recommendation.rank,
+
+                  selected: false,
+
+                  matchedSkillsJson:
+                    JSON.stringify(
+                      recommendation.matchedSkills
+                    ),
+
+                  missingSkillsJson:
+                    JSON.stringify(
+                      recommendation.missingSkills
+                    ),
+                },
+              });
+            }
+
+            return transaction.roleRecommendation.findMany({
+              where: {
+                resumeId,
+                careerRoleId: {
+                  in: recommendedCareerIds,
+                },
+              },
+
+              orderBy: {
+                rank: "asc",
+              },
+
+              include: {
+                careerRole: true,
+              },
+            });
+          }
+        );
+
+      const formattedRecommendations =
+        savedRecommendations.map(
+          (recommendation) => ({
+            recommendationId: recommendation.id,
+            rank: recommendation.rank,
+            matchScore: recommendation.matchScore,
+            reason: recommendation.reason,
+            selected: recommendation.selected,
+
+            matchedSkills: JSON.parse(
+              recommendation.matchedSkillsJson || "[]"
+            ),
+
+            missingSkills: JSON.parse(
+              recommendation.missingSkillsJson || "[]"
+            ),
+
+            career: {
+              id: recommendation.careerRole.id,
+
+              onetSocCode:
+                recommendation.careerRole.onetSocCode,
+
+              blsOccupationCode:
+                recommendation.careerRole
+                  .blsOccupationCode,
+
+              title:
+                recommendation.careerRole.title,
+
+              description:
+                recommendation.careerRole.description,
+
+              lucideIcon:
+                recommendation.careerRole.lucideIcon,
+
+              salary: {
+                minimum:
+                  recommendation.careerRole.salaryMin,
+
+                maximum:
+                  recommendation.careerRole.salaryMax,
+
+                source:
+                  recommendation.careerRole.wageSource,
+
+                updatedAt:
+                  recommendation.careerRole
+                    .blsDataUpdatedAt,
+              },
+
+              employmentGrowthPercent:
+                recommendation.careerRole
+                  .employmentGrowthPercent,
+
+              jobOutlook:
+                recommendation.careerRole.jobOutlook,
+
+              targetScore:
+                recommendation.careerRole.targetScore,
+
+              sources: {
+                occupation:
+                  recommendation.careerRole
+                    .occupationSource,
+
+                wages:
+                  recommendation.careerRole.wageSource,
+              },
+            },
+          })
+        );
+
+      return res.status(201).json({
+        message:
+          "Career recommendations generated successfully.",
+
+        resume: {
+          id: resume.id,
+          originalFileName: resume.originalFileName,
+        },
+
+        candidateCount:
+          careerCandidates.length,
+
+        count:
+          formattedRecommendations.length,
+
+        recommendations:
+          formattedRecommendations,
+      });
+    } catch (error) {
+      console.error(
+        "Unable to generate career recommendations:",
+        error
+      );
+
+      return res.status(500).json({
+        message:
+          "Unable to generate career recommendations.",
+
+        error: error.message,
+      });
+    }
+  }
+);
+
 // GET /api/resumes/:resumeId/recommendations
 router.get(
   "/:resumeId/recommendations",
@@ -632,6 +913,13 @@ router.get(
           matchScore: recommendation.matchScore,
           reason: recommendation.reason,
           selected: recommendation.selected,
+          matchedSkills: JSON.parse(
+            recommendation.matchedSkillsJson || "[]"
+          ),
+
+          missingSkills: JSON.parse(
+            recommendation.missingSkillsJson || "[]"
+          ),
 
           career: {
             id: recommendation.careerRole.id,
