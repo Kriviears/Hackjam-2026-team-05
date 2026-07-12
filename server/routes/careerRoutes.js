@@ -191,6 +191,11 @@ router.get("/", authMiddleware, async (req, res) => {
         wageSource: true,
         sourceUpdatedAt: true,
         blsDataUpdatedAt: true,
+
+        // BLS lookup tracking
+        blsLookupAttempted: true,
+        blsLookupAttemptedAt: true,
+        blsLookupError: true,
       },
     });
 
@@ -209,6 +214,27 @@ router.get("/", authMiddleware, async (req, res) => {
         maximum: role.salaryMax,
         source: role.wageSource,
         updatedAt: role.blsDataUpdatedAt,
+      },
+
+      bls: {
+        occupationCodeAvailable:
+          Boolean(role.blsOccupationCode),
+
+        salaryAvailable:
+          role.salaryMin !== null &&
+          role.salaryMax !== null,
+
+        employmentProjectionAvailable:
+          role.employmentGrowthPercent !== null,
+
+        lookupAttempted:
+          role.blsLookupAttempted,
+
+        lookupAttemptedAt:
+          role.blsLookupAttemptedAt,
+
+        lookupError:
+          role.blsLookupError,
       },
 
       employmentGrowthPercent:
