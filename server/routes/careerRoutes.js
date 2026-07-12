@@ -97,6 +97,15 @@ function buildCareerResponse(
       employmentProjectionAvailable:
         careerRole.employmentGrowthPercent !== null,
 
+      lookupAttempted:
+        careerRole.blsLookupAttempted,
+
+      lookupAttemptedAt:
+        careerRole.blsLookupAttemptedAt,
+
+      lookupError:
+        careerRole.blsLookupError,
+
       salarySource,
       salaryRefreshed,
       error: blsError,
@@ -156,24 +165,70 @@ router.get("/", authMiddleware, async (req, res) => {
 
       select: {
         id: true,
+
+        // Standard occupation identifiers
         onetSocCode: true,
         blsOccupationCode: true,
+
+        // Display fields
         title: true,
         description: true,
         lucideIcon: true,
+
+        // Wage data
         salaryMin: true,
         salaryMax: true,
+
+        // Employment projection data
         employmentGrowthPercent: true,
         jobOutlook: true,
-        wageSource: true,
-        blsDataUpdatedAt: true,
+
+        // Matching target
         targetScore: true,
+
+        // Source tracking
+        occupationSource: true,
+        wageSource: true,
+        sourceUpdatedAt: true,
+        blsDataUpdatedAt: true,
       },
     });
 
+    const formattedRoles = roles.map((role) => ({
+      id: role.id,
+
+      onetSocCode: role.onetSocCode,
+      blsOccupationCode: role.blsOccupationCode,
+
+      title: role.title,
+      description: role.description,
+      lucideIcon: role.lucideIcon,
+
+      salary: {
+        minimum: role.salaryMin,
+        maximum: role.salaryMax,
+        source: role.wageSource,
+        updatedAt: role.blsDataUpdatedAt,
+      },
+
+      employmentGrowthPercent:
+        role.employmentGrowthPercent,
+
+      jobOutlook: role.jobOutlook,
+
+      targetScore: role.targetScore,
+
+      sources: {
+        occupation: role.occupationSource,
+        wages: role.wageSource,
+      },
+
+      sourceUpdatedAt: role.sourceUpdatedAt,
+    }));
+
     return res.json({
-      count: roles.length,
-      roles,
+      count: formattedRoles.length,
+      roles: formattedRoles,
     });
   } catch (error) {
     console.error("Unable to retrieve careers:", error);
@@ -259,6 +314,23 @@ router.get(
       // Return the saved SQLite values when the BLS data
       // exists and is still within the cache window.
       if (cachedSalaryAvailable && cacheIsFresh) {
+        // Older rows may already contain BLS salary data but were
+        // created before BLS lookup tracking fields were added.
+        // Backfill the tracking fields without calling BLS again.
+        if (!careerRole.blsLookupAttempted) {
+          careerRole = await prisma.careerRole.update({
+            where: {
+              id: careerRole.id,
+            },
+            data: {
+              blsLookupAttempted: true,
+              blsLookupAttemptedAt:
+                careerRole.blsDataUpdatedAt || new Date(),
+              blsLookupError: null,
+            },
+          });
+        }
+
         return res.json({
           career: buildCareerResponse(careerRole, {
             salarySource: "DATABASE",
@@ -288,6 +360,11 @@ router.get(
               wageSource: "BLS OEWS",
               blsDataUpdatedAt: new Date(),
               sourceUpdatedAt: new Date(),
+
+              // Record that BLS was contacted successfully.
+              blsLookupAttempted: true,
+              blsLookupAttemptedAt: new Date(),
+              blsLookupError: null,
             },
           });
 
@@ -302,6 +379,26 @@ router.get(
           "Unable to refresh BLS salary data:",
           blsError
         );
+
+        try {
+          careerRole = await prisma.careerRole.update({
+            where: {
+              id: careerRole.id,
+            },
+            data: {
+              // Record the attempted lookup even when BLS fails
+              // or does not provide salary data for the occupation.
+              blsLookupAttempted: true,
+              blsLookupAttemptedAt: new Date(),
+              blsLookupError: blsError.message,
+            },
+          });
+        } catch (trackingError) {
+          console.error(
+            "Unable to save BLS lookup status:",
+            trackingError
+          );
+        }
 
         // If older salary data exists, return it even though
         // the attempt to refresh it failed.
