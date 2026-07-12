@@ -10,6 +10,7 @@ const {
 } = require("@prisma/adapter-better-sqlite3");
 
 const { authMiddleware } = require("../utils/auth");
+
 const {
   extractResumeText,
 } = require("../services/resumeTextExtractor");
@@ -17,6 +18,10 @@ const {
 const {
   analyzeResume,
 } = require("../services/ai/resumeAnalyzer");
+
+const {
+  getJobOutlook,
+} = require("../services/blsService");
 
 const {
   selectCareerCandidates,
@@ -62,7 +67,6 @@ const storage = multer.diskStorage({
 });
 
 // FILE VALIDATION
-// FILE VALIDATION
 const allowedExtensions = [".pdf", ".docx"];
 
 const allowedMimeTypes = [
@@ -82,12 +86,17 @@ const fileFilter = (req, file, callback) => {
     extension,
   });
 
-  const validExtension = allowedExtensions.includes(extension);
-  const validMimeType = allowedMimeTypes.includes(file.mimetype);
+  const validExtension =
+    allowedExtensions.includes(extension);
+
+  const validMimeType =
+    allowedMimeTypes.includes(file.mimetype);
 
   if (!validExtension || !validMimeType) {
     return callback(
-      new Error("Only PDF and DOCX résumé files are supported.")
+      new Error(
+        "Only PDF and DOCX résumé files are supported."
+      )
     );
   }
 
@@ -143,29 +152,32 @@ router.post(
       }
 
       // Store the extracted text for later AI analysis.
-      const analysis = await prisma.resumeAnalysis.create({
-        data: {
-          resumeId: resume.id,
-          rawExtractedText: extractedText,
-          analysisStatus: "COMPLETED",
-          analyzedAt: new Date(),
-        },
-      });
+      const analysis =
+        await prisma.resumeAnalysis.create({
+          data: {
+            resumeId: resume.id,
+            rawExtractedText: extractedText,
+            analysisStatus: "COMPLETED",
+            analyzedAt: new Date(),
+          },
+        });
 
       // Mark the résumé processing as complete.
-      const completedResume = await prisma.resume.update({
-        where: {
-          id: resume.id,
-        },
-        data: {
-          processingStatus: "COMPLETED",
-          processingError: null,
-        },
-      });
+      const completedResume =
+        await prisma.resume.update({
+          where: {
+            id: resume.id,
+          },
+          data: {
+            processingStatus: "COMPLETED",
+            processingError: null,
+          },
+        });
 
       return res.status(201).json({
         message:
           "Résumé uploaded and text extracted successfully.",
+
         resume: {
           id: completedResume.id,
           originalFileName:
@@ -176,6 +188,7 @@ router.post(
             completedResume.processingStatus,
           uploadedAt: completedResume.uploadedAt,
         },
+
         analysis: {
           id: analysis.id,
           status: analysis.analysisStatus,
@@ -184,7 +197,10 @@ router.post(
         },
       });
     } catch (error) {
-      console.error("Résumé processing error:", error);
+      console.error(
+        "Résumé processing error:",
+        error
+      );
 
       // Update the existing résumé record if it was already created.
       if (resume) {
@@ -333,7 +349,8 @@ router.post(
           }
 
           if (
-            structuredAnalysis.employmentHistory.length > 0
+            structuredAnalysis.employmentHistory.length >
+            0
           ) {
             await transaction.employmentHistory.createMany({
               data:
@@ -346,8 +363,9 @@ router.post(
                     location: job.location || null,
                     startDate: job.startDate || null,
                     endDate: job.endDate || null,
-                    isCurrentRole:
-                      Boolean(job.isCurrentRole),
+                    isCurrentRole: Boolean(
+                      job.isCurrentRole
+                    ),
                     description:
                       job.description || null,
                     confirmedByUser: false,
@@ -356,18 +374,23 @@ router.post(
             });
           }
 
-          if (structuredAnalysis.education.length > 0) {
+          if (
+            structuredAnalysis.education.length > 0
+          ) {
             await transaction.education.createMany({
               data: structuredAnalysis.education.map(
                 (education) => ({
                   userId: req.user.id,
                   resumeId,
-                  institution: education.institution,
+                  institution:
+                    education.institution,
                   degree: education.degree || null,
                   fieldOfStudy:
                     education.fieldOfStudy || null,
-                  startDate: education.startDate || null,
-                  endDate: education.endDate || null,
+                  startDate:
+                    education.startDate || null,
+                  endDate:
+                    education.endDate || null,
                   description:
                     education.description || null,
                   confirmedByUser: false,
@@ -406,19 +429,28 @@ router.post(
       return res.json({
         message: "Résumé analyzed successfully.",
         resumeId,
+
         analysis: {
           status:
             savedResult.analysis.analysisStatus,
+
           professionalSummary:
-            savedResult.analysis.professionalSummary,
+            savedResult.analysis
+              .professionalSummary,
+
           skills: savedResult.skills,
+
           employmentHistory:
             savedResult.employmentHistory,
+
           education: savedResult.education,
         },
       });
     } catch (error) {
-      console.error("Résumé AI analysis failed:", error);
+      console.error(
+        "Résumé AI analysis failed:",
+        error
+      );
 
       try {
         await prisma.resumeAnalysis.update({
@@ -451,7 +483,9 @@ router.get(
   authMiddleware,
   async (req, res) => {
     try {
-      const resumeId = Number(req.params.resumeId);
+      const resumeId = Number(
+        req.params.resumeId
+      );
 
       if (!Number.isInteger(resumeId)) {
         return res.status(400).json({
@@ -459,30 +493,35 @@ router.get(
         });
       }
 
-      const resume = await prisma.resume.findFirst({
-        where: {
-          id: resumeId,
-          userId: req.user.id,
-        },
-        include: {
-          analysis: true,
-          skills: {
-            orderBy: {
-              name: "asc",
+      const resume =
+        await prisma.resume.findFirst({
+          where: {
+            id: resumeId,
+            userId: req.user.id,
+          },
+
+          include: {
+            analysis: true,
+
+            skills: {
+              orderBy: {
+                name: "asc",
+              },
+            },
+
+            employmentHistory: {
+              orderBy: {
+                id: "asc",
+              },
+            },
+
+            education: {
+              orderBy: {
+                id: "asc",
+              },
             },
           },
-          employmentHistory: {
-            orderBy: {
-              id: "asc",
-            },
-          },
-          education: {
-            orderBy: {
-              id: "asc",
-            },
-          },
-        },
-      });
+        });
 
       if (!resume) {
         return res.status(404).json({
@@ -493,23 +532,33 @@ router.get(
       return res.json({
         resume: {
           id: resume.id,
-          originalFileName: resume.originalFileName,
+          originalFileName:
+            resume.originalFileName,
           mimeType: resume.mimeType,
           fileSize: resume.fileSize,
-          processingStatus: resume.processingStatus,
-          processingError: resume.processingError,
+          processingStatus:
+            resume.processingStatus,
+          processingError:
+            resume.processingError,
           uploadedAt: resume.uploadedAt,
         },
 
         analysis: resume.analysis
           ? {
-            id: resume.analysis.id,
-            analysisStatus: resume.analysis.analysisStatus,
-            professionalSummary:
-              resume.analysis.professionalSummary,
-            analysisError: resume.analysis.analysisError,
-            analyzedAt: resume.analysis.analyzedAt,
-          }
+              id: resume.analysis.id,
+              analysisStatus:
+                resume.analysis.analysisStatus,
+
+              professionalSummary:
+                resume.analysis
+                  .professionalSummary,
+
+              analysisError:
+                resume.analysis.analysisError,
+
+              analyzedAt:
+                resume.analysis.analyzedAt,
+            }
           : null,
 
         skills: resume.skills.map((skill) => ({
@@ -519,11 +568,12 @@ router.get(
           level: skill.level,
           source: skill.source,
           confidence: skill.confidence,
-          confirmedByUser: skill.confirmedByUser,
+          confirmedByUser:
+            skill.confirmedByUser,
         })),
 
-        employmentHistory: resume.employmentHistory.map(
-          (job) => ({
+        employmentHistory:
+          resume.employmentHistory.map((job) => ({
             id: job.id,
             company: job.company,
             jobTitle: job.jobTitle,
@@ -532,20 +582,23 @@ router.get(
             endDate: job.endDate,
             isCurrentRole: job.isCurrentRole,
             description: job.description,
-            confirmedByUser: job.confirmedByUser,
+            confirmedByUser:
+              job.confirmedByUser,
+          })),
+
+        education: resume.education.map(
+          (item) => ({
+            id: item.id,
+            institution: item.institution,
+            degree: item.degree,
+            fieldOfStudy: item.fieldOfStudy,
+            startDate: item.startDate,
+            endDate: item.endDate,
+            description: item.description,
+            confirmedByUser:
+              item.confirmedByUser,
           })
         ),
-
-        education: resume.education.map((item) => ({
-          id: item.id,
-          institution: item.institution,
-          degree: item.degree,
-          fieldOfStudy: item.fieldOfStudy,
-          startDate: item.startDate,
-          endDate: item.endDate,
-          description: item.description,
-          confirmedByUser: item.confirmedByUser,
-        })),
       });
     } catch (error) {
       console.error(
@@ -554,7 +607,8 @@ router.get(
       );
 
       return res.status(500).json({
-        message: "Unable to retrieve résumé analysis.",
+        message:
+          "Unable to retrieve résumé analysis.",
       });
     }
   }
@@ -566,7 +620,9 @@ router.post(
   authMiddleware,
   async (req, res) => {
     try {
-      const resumeId = Number(req.params.resumeId);
+      const resumeId = Number(
+        req.params.resumeId
+      );
 
       if (!Number.isInteger(resumeId)) {
         return res.status(400).json({
@@ -575,18 +631,20 @@ router.post(
       }
 
       // Load the résumé and all structured résumé data.
-      const resume = await prisma.resume.findFirst({
-        where: {
-          id: resumeId,
-          userId: req.user.id,
-        },
-        include: {
-          analysis: true,
-          skills: true,
-          employmentHistory: true,
-          education: true,
-        },
-      });
+      const resume =
+        await prisma.resume.findFirst({
+          where: {
+            id: resumeId,
+            userId: req.user.id,
+          },
+
+          include: {
+            analysis: true,
+            skills: true,
+            employmentHistory: true,
+            education: true,
+          },
+        });
 
       if (!resume) {
         return res.status(404).json({
@@ -595,7 +653,8 @@ router.post(
       }
 
       if (
-        resume.analysis?.analysisStatus !== "COMPLETED"
+        resume.analysis?.analysisStatus !==
+        "COMPLETED"
       ) {
         return res.status(409).json({
           message:
@@ -619,6 +678,7 @@ router.post(
             title: true,
             description: true,
           },
+
           orderBy: {
             id: "asc",
           },
@@ -670,87 +730,105 @@ router.post(
           async (transaction) => {
             // Re-running recommendation generation replaces
             // the previous recommendation set for this résumé.
-            await transaction.roleRecommendation.deleteMany({
-              where: {
-                resumeId,
-              },
-            });
+            await transaction.roleRecommendation.deleteMany(
+              {
+                where: {
+                  resumeId,
+                },
+              }
+            );
 
             for (
               const recommendation of
               generatedRecommendations
             ) {
-              await transaction.roleRecommendation.create({
-                data: {
-                  resumeId,
-                  careerRoleId:
-                    recommendation.careerRoleId,
+              await transaction.roleRecommendation.create(
+                {
+                  data: {
+                    resumeId,
 
-                  matchScore:
-                    recommendation.matchScore,
+                    careerRoleId:
+                      recommendation.careerRoleId,
 
-                  reason:
-                    recommendation.reason,
+                    matchScore:
+                      recommendation.matchScore,
 
-                  rank:
-                    recommendation.rank,
+                    reason:
+                      recommendation.reason,
 
-                  selected: false,
+                    rank:
+                      recommendation.rank,
 
-                  matchedSkillsJson:
-                    JSON.stringify(
-                      recommendation.matchedSkills
-                    ),
+                    selected: false,
 
-                  missingSkillsJson:
-                    JSON.stringify(
-                      recommendation.missingSkills
-                    ),
-                },
-              });
+                    matchedSkillsJson:
+                      JSON.stringify(
+                        recommendation.matchedSkills
+                      ),
+
+                    missingSkillsJson:
+                      JSON.stringify(
+                        recommendation.missingSkills
+                      ),
+                  },
+                }
+              );
             }
 
-            return transaction.roleRecommendation.findMany({
-              where: {
-                resumeId,
-                careerRoleId: {
-                  in: recommendedCareerIds,
+            return transaction.roleRecommendation.findMany(
+              {
+                where: {
+                  resumeId,
+
+                  careerRoleId: {
+                    in: recommendedCareerIds,
+                  },
                 },
-              },
 
-              orderBy: {
-                rank: "asc",
-              },
+                orderBy: {
+                  rank: "asc",
+                },
 
-              include: {
-                careerRole: true,
-              },
-            });
+                include: {
+                  careerRole: true,
+                },
+              }
+            );
           }
         );
 
       const formattedRecommendations =
         savedRecommendations.map(
           (recommendation) => ({
-            recommendationId: recommendation.id,
+            recommendationId:
+              recommendation.id,
+
             rank: recommendation.rank,
-            matchScore: recommendation.matchScore,
+
+            matchScore:
+              recommendation.matchScore,
+
             reason: recommendation.reason,
-            selected: recommendation.selected,
+
+            selected:
+              recommendation.selected,
 
             matchedSkills: JSON.parse(
-              recommendation.matchedSkillsJson || "[]"
+              recommendation.matchedSkillsJson ||
+                "[]"
             ),
 
             missingSkills: JSON.parse(
-              recommendation.missingSkillsJson || "[]"
+              recommendation.missingSkillsJson ||
+                "[]"
             ),
 
             career: {
               id: recommendation.careerRole.id,
 
               onetSocCode:
-                recommendation.careerRole.onetSocCode,
+                recommendation.careerRole
+                  .onetSocCode,
 
               blsOccupationCode:
                 recommendation.careerRole
@@ -760,20 +838,25 @@ router.post(
                 recommendation.careerRole.title,
 
               description:
-                recommendation.careerRole.description,
+                recommendation.careerRole
+                  .description,
 
               lucideIcon:
-                recommendation.careerRole.lucideIcon,
+                recommendation.careerRole
+                  .lucideIcon,
 
               salary: {
                 minimum:
-                  recommendation.careerRole.salaryMin,
+                  recommendation.careerRole
+                    .salaryMin,
 
                 maximum:
-                  recommendation.careerRole.salaryMax,
+                  recommendation.careerRole
+                    .salaryMax,
 
                 source:
-                  recommendation.careerRole.wageSource,
+                  recommendation.careerRole
+                    .wageSource,
 
                 updatedAt:
                   recommendation.careerRole
@@ -785,10 +868,46 @@ router.post(
                   .employmentGrowthPercent,
 
               jobOutlook:
-                recommendation.careerRole.jobOutlook,
+                recommendation.careerRole
+                  .jobOutlook ||
+                getJobOutlook(
+                  recommendation.careerRole
+                    .employmentGrowthPercent
+                ),
 
               targetScore:
-                recommendation.careerRole.targetScore,
+                recommendation.careerRole
+                  .targetScore,
+
+              bls: {
+                occupationCodeAvailable:
+                  Boolean(
+                    recommendation.careerRole
+                      .blsOccupationCode
+                  ),
+
+                salaryAvailable:
+                  recommendation.careerRole
+                    .salaryMin !== null &&
+                  recommendation.careerRole
+                    .salaryMax !== null,
+
+                employmentProjectionAvailable:
+                  recommendation.careerRole
+                    .employmentGrowthPercent !== null,
+
+                lookupAttempted:
+                  recommendation.careerRole
+                    .blsLookupAttempted,
+
+                lookupAttemptedAt:
+                  recommendation.careerRole
+                    .blsLookupAttemptedAt,
+
+                lookupError:
+                  recommendation.careerRole
+                    .blsLookupError,
+              },
 
               sources: {
                 occupation:
@@ -796,7 +915,8 @@ router.post(
                     .occupationSource,
 
                 wages:
-                  recommendation.careerRole.wageSource,
+                  recommendation.careerRole
+                    .wageSource,
               },
             },
           })
@@ -808,7 +928,8 @@ router.post(
 
         resume: {
           id: resume.id,
-          originalFileName: resume.originalFileName,
+          originalFileName:
+            resume.originalFileName,
         },
 
         candidateCount:
@@ -842,7 +963,9 @@ router.get(
   authMiddleware,
   async (req, res) => {
     try {
-      const resumeId = Number(req.params.resumeId);
+      const resumeId = Number(
+        req.params.resumeId
+      );
 
       if (!Number.isInteger(resumeId)) {
         return res.status(400).json({
@@ -851,16 +974,18 @@ router.get(
       }
 
       // Confirm that the résumé belongs to the logged-in user.
-      const resume = await prisma.resume.findFirst({
-        where: {
-          id: resumeId,
-          userId: req.user.id,
-        },
-        select: {
-          id: true,
-          originalFileName: true,
-        },
-      });
+      const resume =
+        await prisma.resume.findFirst({
+          where: {
+            id: resumeId,
+            userId: req.user.id,
+          },
+
+          select: {
+            id: true,
+            originalFileName: true,
+          },
+        });
 
       if (!resume) {
         return res.status(404).json({
@@ -901,89 +1026,152 @@ router.get(
                 occupationSource: true,
                 wageSource: true,
                 blsDataUpdatedAt: true,
+
+                blsLookupAttempted: true,
+                blsLookupAttemptedAt: true,
+                blsLookupError: true,
               },
             },
           },
         });
 
       const formattedRecommendations =
-        recommendations.map((recommendation) => ({
-          recommendationId: recommendation.id,
-          rank: recommendation.rank,
-          matchScore: recommendation.matchScore,
-          reason: recommendation.reason,
-          selected: recommendation.selected,
-          matchedSkills: JSON.parse(
-            recommendation.matchedSkillsJson || "[]"
-          ),
+        recommendations.map(
+          (recommendation) => ({
+            recommendationId:
+              recommendation.id,
 
-          missingSkills: JSON.parse(
-            recommendation.missingSkillsJson || "[]"
-          ),
+            rank: recommendation.rank,
 
-          career: {
-            id: recommendation.careerRole.id,
+            matchScore:
+              recommendation.matchScore,
 
-            onetSocCode:
-              recommendation.careerRole.onetSocCode,
+            reason: recommendation.reason,
 
-            blsOccupationCode:
-              recommendation.careerRole
-                .blsOccupationCode,
+            selected:
+              recommendation.selected,
 
-            title: recommendation.careerRole.title,
+            matchedSkills: JSON.parse(
+              recommendation.matchedSkillsJson ||
+                "[]"
+            ),
 
-            description:
-              recommendation.careerRole.description,
+            missingSkills: JSON.parse(
+              recommendation.missingSkillsJson ||
+                "[]"
+            ),
 
-            lucideIcon:
-              recommendation.careerRole.lucideIcon,
+            career: {
+              id: recommendation.careerRole.id,
 
-            salary: {
-              minimum:
-                recommendation.careerRole.salaryMin,
-
-              maximum:
-                recommendation.careerRole.salaryMax,
-
-              source:
-                recommendation.careerRole.wageSource,
-
-              updatedAt:
+              onetSocCode:
                 recommendation.careerRole
-                  .blsDataUpdatedAt,
-            },
+                  .onetSocCode,
 
-            employmentGrowthPercent:
-              recommendation.careerRole
-                .employmentGrowthPercent,
-
-            jobOutlook:
-              recommendation.careerRole.jobOutlook,
-
-            targetScore:
-              recommendation.careerRole.targetScore,
-
-            sources: {
-              occupation:
+              blsOccupationCode:
                 recommendation.careerRole
-                  .occupationSource,
+                  .blsOccupationCode,
 
-              wages:
-                recommendation.careerRole.wageSource,
+              title:
+                recommendation.careerRole.title,
+
+              description:
+                recommendation.careerRole
+                  .description,
+
+              lucideIcon:
+                recommendation.careerRole
+                  .lucideIcon,
+
+              salary: {
+                minimum:
+                  recommendation.careerRole
+                    .salaryMin,
+
+                maximum:
+                  recommendation.careerRole
+                    .salaryMax,
+
+                source:
+                  recommendation.careerRole
+                    .wageSource,
+
+                updatedAt:
+                  recommendation.careerRole
+                    .blsDataUpdatedAt,
+              },
+
+              employmentGrowthPercent:
+                recommendation.careerRole
+                  .employmentGrowthPercent,
+
+              jobOutlook:
+                recommendation.careerRole
+                  .jobOutlook ||
+                getJobOutlook(
+                  recommendation.careerRole
+                    .employmentGrowthPercent
+                ),
+
+              targetScore:
+                recommendation.careerRole
+                  .targetScore,
+
+              bls: {
+                occupationCodeAvailable:
+                  Boolean(
+                    recommendation.careerRole
+                      .blsOccupationCode
+                  ),
+
+                salaryAvailable:
+                  recommendation.careerRole
+                    .salaryMin !== null &&
+                  recommendation.careerRole
+                    .salaryMax !== null,
+
+                employmentProjectionAvailable:
+                  recommendation.careerRole
+                    .employmentGrowthPercent !== null,
+
+                lookupAttempted:
+                  recommendation.careerRole
+                    .blsLookupAttempted,
+
+                lookupAttemptedAt:
+                  recommendation.careerRole
+                    .blsLookupAttemptedAt,
+
+                lookupError:
+                  recommendation.careerRole
+                    .blsLookupError,
+              },
+
+              sources: {
+                occupation:
+                  recommendation.careerRole
+                    .occupationSource,
+
+                wages:
+                  recommendation.careerRole
+                    .wageSource,
+              },
             },
-          },
-        }));
+          })
+        );
 
       return res.json({
         resume: {
           id: resume.id,
-          originalFileName: resume.originalFileName,
+          originalFileName:
+            resume.originalFileName,
         },
 
-        count: formattedRecommendations.length,
+        count:
+          formattedRecommendations.length,
 
-        recommendations: formattedRecommendations,
+        recommendations:
+          formattedRecommendations,
       });
     } catch (error) {
       console.error(
@@ -1005,7 +1193,9 @@ router.get(
   authMiddleware,
   async (req, res) => {
     try {
-      const resumeId = Number(req.params.resumeId);
+      const resumeId = Number(
+        req.params.resumeId
+      );
 
       if (!Number.isInteger(resumeId)) {
         return res.status(400).json({
@@ -1013,19 +1203,21 @@ router.get(
         });
       }
 
-      const resume = await prisma.resume.findFirst({
-        where: {
-          id: resumeId,
-          userId: req.user.id,
-        },
-        include: {
-          analysis: {
-            select: {
-              rawExtractedText: true,
+      const resume =
+        await prisma.resume.findFirst({
+          where: {
+            id: resumeId,
+            userId: req.user.id,
+          },
+
+          include: {
+            analysis: {
+              select: {
+                rawExtractedText: true,
+              },
             },
           },
-        },
-      });
+        });
 
       if (!resume) {
         return res.status(404).json({
@@ -1035,9 +1227,13 @@ router.get(
 
       return res.json({
         resumeId: resume.id,
-        originalFileName: resume.originalFileName,
+
+        originalFileName:
+          resume.originalFileName,
+
         rawExtractedText:
-          resume.analysis?.rawExtractedText || null,
+          resume.analysis
+            ?.rawExtractedText || null,
       });
     } catch (error) {
       console.error(
@@ -1046,19 +1242,20 @@ router.get(
       );
 
       return res.status(500).json({
-        message: "Unable to retrieve raw résumé text.",
+        message:
+          "Unable to retrieve raw résumé text.",
       });
     }
   }
 );
-
 
 // MULTER ERROR HANDLER
 router.use((error, req, res, next) => {
   if (error instanceof multer.MulterError) {
     if (error.code === "LIMIT_FILE_SIZE") {
       return res.status(400).json({
-        message: "Résumé must be 5 MB or smaller.",
+        message:
+          "Résumé must be 5 MB or smaller.",
       });
     }
 
