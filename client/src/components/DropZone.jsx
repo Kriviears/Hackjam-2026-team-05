@@ -1,39 +1,41 @@
 import { useRef, useState } from "react";
-
-/**
- * Resume drop zone. Three states: idle → drag-over → parsing.
- * The parsing state is deliberate theater: mono status lines tick
- * while the "AI reads" the resume. onParsed fires when done.
- */
+import { uploadResume } from '../services/api';
 const PARSE_LINES = [
   "Reading your resume...",
   "Parsing skills...",
   "Matching roles...",
 ];
 
-export default function DropZone({ onParsed }) {
+export default function DropZone({ onParsed, onFileSelected }) {
   const [state, setState] = useState("idle"); // idle | over | parsing
   const [lineIndex, setLineIndex] = useState(0);
   const [fileName, setFileName] = useState(null);
   const inputRef = useRef(null);
 
-  const startParse = (file) => {
-    setFileName(file.name);
-    setState("parsing");
-    setLineIndex(0);
-    // fake AI pass — swap for services/api.js upload + poll when backend lands
-    const timer = setInterval(() => {
-      setLineIndex((i) => {
-        if (i >= PARSE_LINES.length - 1) {
-          clearInterval(timer);
-          setTimeout(() => onParsed?.(file), 500);
-          return i;
-        }
-        return i + 1;
-      });
-    }, 700);
-  };
-
+  const startParse = async (file) => {
+  setFileName(file.name);
+  setState("parsing");
+  setLineIndex(0);
+  const timer = setInterval(() => {
+    setLineIndex((i) => (i + 1) % PARSE_LINES.length);
+  }, 700);
+  try {
+    await onFileSelected(file);   // real upload + poll, owned by the page
+    clearInterval(timer);
+    onParsed?.(file);
+  } catch (err) {
+    clearInterval(timer);
+    setState("error");
+  }
+};
+const handleFileSelected = async (file) => {
+  const result = await uploadResume(file, github);   
+  const id = result.resume.id;
+  sessionStorage.setItem("resumeId", id);            
+  if (result.resume.processingStatus !== "COMPLETED") {
+    
+  }
+};
   const onDrop = (e) => {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];

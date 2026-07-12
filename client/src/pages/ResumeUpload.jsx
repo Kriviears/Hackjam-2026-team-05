@@ -4,6 +4,8 @@ import StepIndicator from "../components/StepIndicator.jsx";
 import DropZone from "../components/DropZone.jsx";
 import { uploadResume, getResumeStatus } from '../services/api';
 
+<DropZone onFileSelected={handleFileSelected} onParsed={() => navigate("/careers")} />
+
 const inputClass =
   "w-full rounded-xl border border-line bg-white px-4 py-3 text-[15px] " +
   "placeholder:text-muted/60 focus:border-ps-blue focus:outline-none";
