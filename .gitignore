@@ -1,3 +1,22 @@
+# Dependencies
+node_modules/
+
+# Environment files
+.env
+
+# SQLite database
+dev.db
+*.db-journal
+
+ Allow the shared demo database
+!server/data/dev.db
+
+# Generated Prisma client
+generated/
+
+# Locally uploaded resumes
+server/uploads/
+=======
 node_modules
 dist
 .env

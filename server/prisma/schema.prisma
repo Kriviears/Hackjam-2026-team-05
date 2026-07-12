@@ -1,51 +1,354 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
 }
- 
+
 datasource db {
   provider = "sqlite"
 }
- 
+
+enum SkillSource {
+  RESUME
+  GITHUB
+  PER_SCHOLAS
+  CERTIFICATION
+  MANUAL
+  AI_INFERRED
+  EMPLOYER
+  MENTOR
+}
+
+enum OptimizationStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum KeywordStatus {
+  MATCHED
+  MISSING
+}
+
+enum MilestoneStatus {
+  COMPLETED
+  ACTIVE
+  LOCKED
+}
+
+enum ActionType {
+  PORTFOLIO
+  COMMUNITY
+  TECH_EVENT
+  INTERVIEW
+  PROFILE
+  RESUME
+  EDUCATION
+}
+
 model User {
-  id          Int         @id @default(autoincrement())
-  githubId    String?     @unique
-  username    String      @unique
-  email       String?     @unique
+  id          Int      @id @default(autoincrement())
+  githubId    String?  @unique
+  username    String   @unique
+  email       String?  @unique
   password    String?
   displayName String?
   avatarUrl   String?
-  stage       String      @default("Aspiring Per Scholian")
-  careerGoal  String      @default("Software Developer")
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
- 
-  skills      Skill[]
-  roadmaps    Roadmap[]
-  milestones  Milestone[]
+  stage       String   @default("Aspiring Per Scholian")
+  careerGoal  String   @default("Software Developer")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  resumes           Resume[]
+  skills            Skill[]
+  employmentHistory EmploymentHistory[]
+  education         Education[]
+  roadmaps          Roadmap[]
+  milestones        Milestone[]
+  readinessReports  ReadinessReport[]
 }
- 
+
+model Resume {
+  id               Int    @id @default(autoincrement())
+  userId           Int
+  originalFileName String
+  storedFileName   String
+  mimeType         String
+  fileSize         Int?
+  filePath         String
+
+  // UPLOADED, PROCESSING, COMPLETED, or FAILED
+  processingStatus String  @default("UPLOADED")
+  processingError  String?
+
+  uploadedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  analysis            ResumeAnalysis?
+  skills              Skill[]
+  employmentHistory   EmploymentHistory[]
+  education           Education[]
+  roleRecommendations RoleRecommendation[]
+  optimizations       ResumeOptimization[]
+}
+
+model ResumeAnalysis {
+  id                  Int     @id @default(autoincrement())
+  resumeId            Int     @unique
+  rawExtractedText    String?
+  professionalSummary String?
+
+  // PENDING, PROCESSING, COMPLETED, or FAILED
+  analysisStatus String    @default("PENDING")
+  analysisError  String?
+  analyzedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+}
+
 model Skill {
-  id     Int    @id @default(autoincrement())
-  name   String
-  level  String
-  userId Int
-  user   User   @relation(fields: [userId], references: [id])
+  id              Int         @id @default(autoincrement())
+  userId          Int
+  resumeId        Int?
+  name            String
+  category        String?
+  level           String?
+  source          SkillSource @default(MANUAL)
+  confidence      Float?
+  confirmedByUser Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resume Resume? @relation(fields: [resumeId], references: [id], onDelete: SetNull)
 }
- 
+
+model EmploymentHistory {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  resumeId        Int?
+  company         String
+  jobTitle        String
+  location        String?
+  startDate       String?
+  endDate         String?
+  isCurrentRole   Boolean  @default(false)
+  description     String?
+  confirmedByUser Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resume Resume? @relation(fields: [resumeId], references: [id], onDelete: SetNull)
+}
+
+model Education {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  resumeId        Int?
+  institution     String
+  degree          String?
+  fieldOfStudy    String?
+  startDate       String?
+  endDate         String?
+  description     String?
+  confirmedByUser Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resume Resume? @relation(fields: [resumeId], references: [id], onDelete: SetNull)
+}
+
 model Roadmap {
   id          Int    @id @default(autoincrement())
   title       String
   description String
   order       Int
   userId      Int
-  user        User   @relation(fields: [userId], references: [id])
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
- 
+
 model Milestone {
-  id        Int     @id @default(autoincrement())
+  id        Int             @id @default(autoincrement())
   title     String
-  completed Boolean @default(false)
-  userId    Int
-  user      User    @relation(fields: [userId], references: [id])
+  status    MilestoneStatus @default(LOCKED)
+  order     Int             @default(0)
+  completed Boolean         @default(false)
+
+  userId   Int
+  reportId Int?
+
+  user   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  report ReadinessReport? @relation(fields: [reportId], references: [id], onDelete: Cascade)
+}
+
+model CareerRole {
+  id Int @id @default(autoincrement())
+
+  // Display fields
+  title       String
+  description String
+  lucideIcon  String @default("Briefcase")
+
+  // Standard occupation identifiers
+  onetSocCode       String  @unique
+  blsOccupationCode String?
+
+  // BLS  Series Code to Retrieve  Salary Info
+  annual10thPercentileSeriesCode String @default("11")
+  annual90thPercentileSeriesCode String @default("15")
+
+  employmentGrowthPercent Float?
+  jobOutlook              String?
+
+  // Wage data
+  salaryMin Int?
+  salaryMax Int?
+
+  // Source tracking
+  occupationSource String    @default("ONET")
+  wageSource       String?
+  sourceUpdatedAt  DateTime?
+
+  targetScore Int      @default(70)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // BLS cache tracking
+  blsDataUpdatedAt DateTime?
+
+  // BLS lookup tracking
+  blsLookupAttempted   Boolean   @default(false)
+  blsLookupAttemptedAt DateTime?
+  blsLookupError       String?
+
+  requiredSkills   RoleSkill[]
+  recommendations  RoleRecommendation[]
+  optimizations    ResumeOptimization[]
+  readinessReports ReadinessReport[]
+
+  @@index([title])
+}
+
+model RoleSkill {
+  id           Int     @id @default(autoincrement())
+  careerRoleId Int
+  name         String
+  category     String?
+  required     Boolean @default(true)
+  weight       Float   @default(1)
+
+  careerRole CareerRole @relation(fields: [careerRoleId], references: [id], onDelete: Cascade)
+
+  @@unique([careerRoleId, name])
+}
+
+model RoleRecommendation {
+  id           Int     @id @default(autoincrement())
+  resumeId     Int
+  careerRoleId Int
+  matchScore   Int
+  reason       String?
+  rank         Int?
+  selected     Boolean @default(false)
+
+  // Résumé-specific skill comparison returned by AI.
+  matchedSkillsJson String?
+  missingSkillsJson String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  resume     Resume     @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  careerRole CareerRole @relation(fields: [careerRoleId], references: [id], onDelete: Cascade)
+
+  @@unique([resumeId, careerRoleId])
+}
+
+model ResumeOptimization {
+  id                 Int                @id @default(autoincrement())
+  resumeId           Int
+  careerRoleId       Int
+  matchScore         Int
+  previousMatchScore Int?
+  targetScore        Int                @default(70)
+  status             OptimizationStatus @default(IN_PROGRESS)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  resume          Resume                   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  careerRole      CareerRole               @relation(fields: [careerRoleId], references: [id], onDelete: Cascade)
+  keywords        OptimizationKeyword[]
+  suggestions     OptimizationSuggestion[]
+  readinessReport ReadinessReport?
+
+  @@unique([resumeId, careerRoleId])
+}
+
+model OptimizationKeyword {
+  id             Int           @id @default(autoincrement())
+  optimizationId Int
+  keyword        String
+  status         KeywordStatus
+  createdAt      DateTime      @default(now())
+
+  optimization ResumeOptimization @relation(fields: [optimizationId], references: [id], onDelete: Cascade)
+
+  @@unique([optimizationId, keyword])
+}
+
+model OptimizationSuggestion {
+  id             Int      @id @default(autoincrement())
+  optimizationId Int
+  action         String
+  completed      Boolean  @default(false)
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  optimization ResumeOptimization @relation(fields: [optimizationId], references: [id], onDelete: Cascade)
+}
+
+model ReadinessReport {
+  id                   Int  @id @default(autoincrement())
+  userId               Int
+  careerRoleId         Int
+  resumeOptimizationId Int? @unique
+
+  readinessScore Int
+  previousScore  Int?
+  targetScore    Int  @default(60)
+  percentile     Int?
+
+  nextStepTitle       String?
+  nextStepDescription String?
+  nextStepActionLabel String?
+  nextStepActionRoute String?
+
+  generatedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  careerRole         CareerRole          @relation(fields: [careerRoleId], references: [id], onDelete: Cascade)
+  resumeOptimization ResumeOptimization? @relation(fields: [resumeOptimizationId], references: [id], onDelete: SetNull)
+  milestones         Milestone[]
+  actionItems        ActionItem[]
+}
+
+model ActionItem {
+  id          Int        @id @default(autoincrement())
+  reportId    Int
+  lucideIcon  String
+  type        ActionType
+  title       String
+  description String
+  actionRoute String?
+  completed   Boolean    @default(false)
+  order       Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  report ReadinessReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
 }

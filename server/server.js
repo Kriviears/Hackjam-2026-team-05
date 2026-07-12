@@ -6,7 +6,10 @@ const cors = require("cors");
 const passport = require("./config/passport");
 
 const routes = require("./routes");
- 
+
+const swaggerUi = require("swagger-ui-express");
+const openApiDocument = require("./docs/openapi");
+
 const app = express();
 const PORT = process.env.PORT || 3000;
  
@@ -22,6 +25,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
  
 app.use(passport.initialize());
+
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(openApiDocument)
+);
+ 
  
 // ROUTES
 app.use(routes);
