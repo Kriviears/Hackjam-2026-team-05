@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@theme {
+  /* Per Scholas palette — extracted from perscholas.org CSS */
+  --color-ps-blue: #0079C0;
+  --color-ps-blue-dark: #09507C;
+  --color-ps-blue-bright: #009CDB;
+  --color-ps-navy: #02273e;
+  --color-ps-gold: #FEC14F;
+  --color-ps-orange: #F58832;
+  --color-ps-teal: #7DC5D7;
+  --color-ink: #232323;
+  --color-bg-warm: #F5F5F4;
+  --color-tint-blue: #DEEDF2;
+  --color-tint-blue-2: #C8E3EC;
+  --color-line: #E5E6E3;
+  --color-muted: #737373;
+
+  --font-display: "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-mono: "Space Mono", monospace;
+}
+
+body {
+  background-color: var(--color-bg-warm);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  /* subtle diagonal pinstripe */
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 6px,
+    rgba(0, 0, 0, 0.015) 6px,
+    rgba(0, 0, 0, 0.015) 7px
+  );
+}
+
+/* mono microtype — the app's labeling voice */
+.microtype {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+/* visible focus for keyboard users */
+:focus-visible {
+  outline: 2px solid var(--color-ps-blue);
+  outline-offset: 2px;
+}
+
+/* parsing shimmer */
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(320%); }
+}
+.scanline {
+  animation: scanline 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .scanline { animation: none; }
+}
