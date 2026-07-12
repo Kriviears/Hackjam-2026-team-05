@@ -16,3 +16,7 @@ generated/
 
 # Locally uploaded resumes
 server/uploads/
+=======
+node_modules
+dist
+.env
