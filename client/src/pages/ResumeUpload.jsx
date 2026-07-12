@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import StepIndicator from "../components/StepIndicator.jsx";
 import DropZone from "../components/DropZone.jsx";
+import { uploadResume, getResumeStatus } from '../services/api';
 
 const inputClass =
   "w-full rounded-xl border border-line bg-white px-4 py-3 text-[15px] " +
