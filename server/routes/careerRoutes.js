@@ -240,7 +240,9 @@ router.get("/", authMiddleware, async (req, res) => {
       employmentGrowthPercent:
         role.employmentGrowthPercent,
 
-      jobOutlook: role.jobOutlook,
+      jobOutlook:
+        role.jobOutlook ||
+        getJobOutlook(role.employmentGrowthPercent),
 
       targetScore: role.targetScore,
 
