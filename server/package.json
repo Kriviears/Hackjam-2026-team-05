@@ -10,7 +10,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "postinstall": "prisma generate",
-    "import:occupations": "node scripts/importOccupations.js"
+    "import:occupations": "node scripts/importOccupations.js",
+    "assign:career-icons": "node scripts/assignCareerIcons.js"
   },
   "keywords": [],
   "author": "",
