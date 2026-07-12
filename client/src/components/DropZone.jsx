@@ -21,7 +21,7 @@ export default function DropZone({ onParsed }) {
     setFileName(file.name);
     setState("parsing");
     setLineIndex(0);
-    // fake AI pass — replace with services/api.js POST /resumes/parse
+    // fake AI pass — swap for services/api.js upload + poll when backend lands
     const timer = setInterval(() => {
       setLineIndex((i) => {
         if (i >= PARSE_LINES.length - 1) {
@@ -44,7 +44,6 @@ export default function DropZone({ onParsed }) {
   if (state === "parsing") {
     return (
       <div className="relative overflow-hidden rounded-2xl border border-line bg-white p-8">
-        {/* scanline shimmer */}
         <div className="scanline pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-transparent via-tint-blue/60 to-transparent" />
         <div className="flex items-center gap-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-ps-gold/20 text-xl">
@@ -52,9 +51,7 @@ export default function DropZone({ onParsed }) {
           </div>
           <div>
             <p className="font-semibold">{fileName}</p>
-            <p className="microtype mt-1 text-ps-blue">
-              {PARSE_LINES[lineIndex]}
-            </p>
+            <p className="microtype mt-1 text-ps-blue">{PARSE_LINES[lineIndex]}</p>
           </div>
         </div>
       </div>

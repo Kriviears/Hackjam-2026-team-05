@@ -20,3 +20,7 @@ server/uploads/
 node_modules
 dist
 .env
+
+server/generated/
+server/dev.db
+*.db
