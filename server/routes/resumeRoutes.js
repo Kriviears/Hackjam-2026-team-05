@@ -28,6 +28,10 @@ const {
   generateCareerRecommendations,
 } = require("../services/ai/careerRecommendationService");
 
+const {
+  generateResumeOptimization,
+} = require("../services/ai/resumeOptimizationService");
+
 // DATABASE
 const adapter = new PrismaBetterSqlite3({
   url: process.env.DATABASE_URL || "file:./dev.db",
@@ -1395,6 +1399,407 @@ router.get(
       return res.status(500).json({
         message:
           "Unable to retrieve career recommendations.",
+      });
+    }
+  }
+);
+
+// POST /api/resumes/:resumeId/optimization
+router.post(
+  "/:resumeId/optimization",
+  authMiddleware,
+  async (req, res) => {
+    const resumeId = Number(req.params.resumeId);
+
+    if (!Number.isInteger(resumeId) || resumeId <= 0) {
+      return res.status(400).json({
+        message: "A valid résumé ID is required.",
+      });
+    }
+
+    try {
+      // Load the résumé and confirm that it belongs
+      // to the authenticated user.
+      const resume = await prisma.resume.findFirst({
+        where: {
+          id: resumeId,
+          userId: req.user.id,
+        },
+
+        include: {
+          analysis: true,
+          skills: true,
+          employmentHistory: true,
+          education: true,
+        },
+      });
+
+      if (!resume) {
+        return res.status(404).json({
+          message: "Résumé not found.",
+        });
+      }
+
+      if (
+        resume.analysis?.analysisStatus !==
+        "COMPLETED"
+      ) {
+        return res.status(409).json({
+          message:
+            "The résumé must be analyzed before it can be optimized.",
+        });
+      }
+
+      // Load the career selected for this résumé.
+      const selectedRecommendation =
+        await prisma.roleRecommendation.findFirst({
+          where: {
+            resumeId,
+            selected: true,
+          },
+
+          include: {
+            careerRole: true,
+          },
+        });
+
+      if (!selectedRecommendation) {
+        return res.status(409).json({
+          message:
+            "A career recommendation must be selected before résumé optimization can be generated.",
+        });
+      }
+
+      const resumeProfile = {
+        professionalSummary:
+          resume.analysis.professionalSummary,
+
+        skills: resume.skills,
+
+        employmentHistory:
+          resume.employmentHistory,
+
+        education: resume.education,
+      };
+
+      const generatedOptimization =
+        await generateResumeOptimization(
+          resumeProfile,
+          selectedRecommendation.careerRole
+        );
+
+      // Remove exact and case-insensitive duplicate keywords.
+      // A matched keyword takes priority if Gemini returns
+      // the same keyword in both arrays.
+      const matchedKeywordMap = new Map();
+
+      for (const keyword of
+        generatedOptimization.matchedKeywords) {
+        const cleanedKeyword = String(
+          keyword || ""
+        ).trim();
+
+        if (cleanedKeyword) {
+          matchedKeywordMap.set(
+            cleanedKeyword.toLowerCase(),
+            cleanedKeyword
+          );
+        }
+      }
+
+      const missingKeywordMap = new Map();
+
+      for (const keyword of
+        generatedOptimization.missingKeywords) {
+        const cleanedKeyword = String(
+          keyword || ""
+        ).trim();
+
+        const normalizedKeyword =
+          cleanedKeyword.toLowerCase();
+
+        if (
+          cleanedKeyword &&
+          !matchedKeywordMap.has(normalizedKeyword)
+        ) {
+          missingKeywordMap.set(
+            normalizedKeyword,
+            cleanedKeyword
+          );
+        }
+      }
+
+      const cleanedSuggestions =
+        generatedOptimization.suggestedActions
+          .map((suggestion) => {
+            const title = String(
+              suggestion.title || ""
+            ).trim();
+
+            const description = String(
+              suggestion.description || ""
+            ).trim();
+
+            if (!title && !description) {
+              return null;
+            }
+
+            return {
+              action:
+                title && description
+                  ? `${title}: ${description}`
+                  : title || description,
+            };
+          })
+          .filter(Boolean);
+
+      const savedOptimization =
+        await prisma.$transaction(
+          async (transaction) => {
+            const existingOptimization =
+              await transaction.resumeOptimization.findUnique(
+                {
+                  where: {
+                    resumeId_careerRoleId: {
+                      resumeId,
+                      careerRoleId:
+                        selectedRecommendation
+                          .careerRoleId,
+                    },
+                  },
+                }
+              );
+
+            const optimization =
+              await transaction.resumeOptimization.upsert({
+                where: {
+                  resumeId_careerRoleId: {
+                    resumeId,
+                    careerRoleId:
+                      selectedRecommendation
+                        .careerRoleId,
+                  },
+                },
+
+                update: {
+                  previousMatchScore:
+                    existingOptimization?.matchScore ??
+                    null,
+
+                  matchScore:
+                    generatedOptimization.matchScore,
+
+                  targetScore:
+                    selectedRecommendation.careerRole
+                      .targetScore ?? 70,
+
+                  status: "COMPLETED",
+                },
+
+                create: {
+                  resumeId,
+
+                  careerRoleId:
+                    selectedRecommendation
+                      .careerRoleId,
+
+                  matchScore:
+                    generatedOptimization.matchScore,
+
+                  previousMatchScore: null,
+
+                  targetScore:
+                    selectedRecommendation.careerRole
+                      .targetScore ?? 70,
+
+                  status: "COMPLETED",
+                },
+              });
+
+            // Regenerating optimization replaces the
+            // previous keywords and suggestions.
+            await transaction.optimizationKeyword.deleteMany(
+              {
+                where: {
+                  optimizationId: optimization.id,
+                },
+              }
+            );
+
+            await transaction.optimizationSuggestion.deleteMany(
+              {
+                where: {
+                  optimizationId: optimization.id,
+                },
+              }
+            );
+
+            const keywordRecords = [
+              ...Array.from(
+                matchedKeywordMap.values()
+              ).map((keyword) => ({
+                optimizationId: optimization.id,
+                keyword,
+                status: "MATCHED",
+              })),
+
+              ...Array.from(
+                missingKeywordMap.values()
+              ).map((keyword) => ({
+                optimizationId: optimization.id,
+                keyword,
+                status: "MISSING",
+              })),
+            ];
+
+            if (keywordRecords.length > 0) {
+              await transaction.optimizationKeyword.createMany(
+                {
+                  data: keywordRecords,
+                }
+              );
+            }
+
+            if (cleanedSuggestions.length > 0) {
+              await transaction.optimizationSuggestion.createMany(
+                {
+                  data: cleanedSuggestions.map(
+                    (suggestion, index) => ({
+                      optimizationId:
+                        optimization.id,
+
+                      action: suggestion.action,
+
+                      completed: false,
+
+                      order: index + 1,
+                    })
+                  ),
+                }
+              );
+            }
+
+            return transaction.resumeOptimization.findUnique({
+              where: {
+                id: optimization.id,
+              },
+
+              include: {
+                careerRole: true,
+
+                keywords: {
+                  orderBy: {
+                    id: "asc",
+                  },
+                },
+
+                suggestions: {
+                  orderBy: {
+                    order: "asc",
+                  },
+                },
+              },
+            });
+          }
+        );
+
+      return res.status(201).json({
+        message:
+          "Résumé optimization generated successfully.",
+
+        optimization: {
+          optimizationId:
+            savedOptimization.id,
+
+          resumeId: resume.id,
+
+          resumeTitle:
+            resume.originalFileName,
+
+          resumeUploadDate:
+            resume.uploadedAt,
+
+          matchScore:
+            savedOptimization.matchScore,
+
+          previousMatchScore:
+            savedOptimization.previousMatchScore,
+
+          targetScore:
+            savedOptimization.targetScore,
+
+          status:
+            savedOptimization.status,
+
+          careerChoice: {
+            careerRoleId:
+              savedOptimization.careerRole.id,
+
+            title:
+              savedOptimization.careerRole.title,
+
+            onetSocCode:
+              savedOptimization.careerRole
+                .onetSocCode,
+
+            lucideIcon:
+              savedOptimization.careerRole
+                .lucideIcon,
+          },
+
+          skills: resume.skills.map(
+            (skill) => skill.name
+          ),
+
+          matchedKeywords:
+            savedOptimization.keywords
+              .filter(
+                (keyword) =>
+                  keyword.status === "MATCHED"
+              )
+              .map(
+                (keyword) => keyword.keyword
+              ),
+
+          missingKeywords:
+            savedOptimization.keywords
+              .filter(
+                (keyword) =>
+                  keyword.status === "MISSING"
+              )
+              .map(
+                (keyword) => keyword.keyword
+              ),
+
+          suggestedActions:
+            savedOptimization.suggestions.map(
+              (suggestion) => ({
+                suggestionId:
+                  suggestion.id,
+
+                action:
+                  suggestion.action,
+
+                completed:
+                  suggestion.completed,
+
+                order:
+                  suggestion.order,
+              })
+            ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Unable to generate résumé optimization:",
+        error
+      );
+
+      return res.status(500).json({
+        message:
+          "Unable to generate résumé optimization.",
+
+        error: error.message,
       });
     }
   }
