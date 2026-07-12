@@ -149,7 +149,7 @@ ${rawResumeText}
 `;
 
   const response = await ai.models.generateContent({
-    model: "gemini-3.1-flash-lite",
+    model: process.env.GEMINI_MODEL,
     contents: prompt,
     config: {
       responseMimeType: "application/json",
