@@ -1,5 +1,4 @@
 // client/src/pages/CareerPicker.jsx
-import { useState } from "react";
 import RoleCard from "../components/RoleCard.jsx";
 import StepIndicator from "../components/StepIndicator.jsx";
 import { useNavigate } from "react-router-dom";
@@ -18,6 +17,15 @@ const DUMMY_ROLES = [
   { lucideIcon: "GraduationCap", Title: "Technical Instructor", Description: "Teach the next cohort what you just learned.", averageSalary: 77000 },];
 
 export default function CareerPicker() {
+  const [roles, setRoles] = useState([]);
+
+  useEffect(() => {
+    const resumeId = sessionStorage.getItem("resumeId");
+    if (!resumeId) return;
+    getCareerRecommendations(resumeId)
+      .then(setRoles)
+      .catch((err) => console.warn("Recommendations failed:", err.message));
+  }, []);
   const [selected, setSelected] = useState(null);
   const navigate = useNavigate();
 
@@ -36,7 +44,7 @@ export default function CareerPicker() {
       </header>
 
        <div className="mt-8 grid gap-4 md:grid-cols-3">
-      {DUMMY_ROLES.map((role) => (
+      {roles.map((role) => (
         <RoleCard
           key={role.Title}
           role={role}

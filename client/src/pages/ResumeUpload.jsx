@@ -2,12 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import StepIndicator from "../components/StepIndicator.jsx";
 import DropZone from "../components/DropZone.jsx";
-import { uploadResume, getResumeStatus } from '../services/api';
-
-const result = await uploadResume(file, github);
-const id = result.resume.id;
-sessionStorage.setItem("resumeId", id);
-await analyzeResume(id);   // ← new: trigger Gemini before navigating
+import { uploadResume, getResumeStatus, analyzeResume } from '../services/api';
 
 const inputClass =
   "w-full rounded-xl border border-line bg-white px-4 py-3 text-[15px] " +
@@ -20,6 +15,7 @@ const handleFileSelected = async (file) => {
     const result = await uploadResume(file, github);
     const id = result.resume.id;
     sessionStorage.setItem("resumeId", id);
+    await analyzeResume(id);
     if (result.resume.processingStatus !== "COMPLETED") {
       // poll getResumeStatus(id) every 2s until COMPLETED 
     }
