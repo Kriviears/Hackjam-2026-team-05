@@ -67,10 +67,8 @@ export async function getCareerRecommendations(resumeId) {
     lucideIcon: rec.career.lucideIcon,
     Title: rec.career.title,
     Description: rec.career.description,
-    averageSalary:
-      rec.career.salary?.minimum != null && rec.career.salary?.maximum != null
-        ? Math.round((rec.career.salary.minimum + rec.career.salary.maximum) / 2)
-        : null,
+    salaryMin: rec.career.salary?.minimum ?? null,
+    salaryMax: rec.career.salary?.maximum ?? null,
     matchScore: rec.matchScore,
     rank: rec.rank,
     reason: rec.reason,

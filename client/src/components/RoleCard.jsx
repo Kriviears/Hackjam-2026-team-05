@@ -20,11 +20,12 @@ export default function RoleCard({ role, selected, onSelect }) {
       <h3 className="mt-4 font-display text-lg font-extrabold">{role.Title}</h3>
       <p className="mt-1 text-sm text-muted line-clamp-3">{role.Description}</p>
       <div className="mt-4 flex items-center justify-between border-t border-line pt-3">
+        <span className="microtype text-muted">Salary range</span>
         <span className="text-sm font-bold">
-  {role.salaryMin != null && role.salaryMax != null
-    ? `$${(role.salaryMin / 1000).toFixed(0)}k – $${(role.salaryMax / 1000).toFixed(0)}k`
-    : "—"}
-</span>
+          {role.salaryMin != null && role.salaryMax != null
+            ? `$${(role.salaryMin / 1000).toFixed(0)}k – $${(role.salaryMax / 1000).toFixed(0)}k`
+            : "—"}
+        </span>
       </div>
     </button>
   );
