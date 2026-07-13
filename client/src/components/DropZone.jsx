@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { uploadResume } from '../services/api';
+
 const PARSE_LINES = [
   "Reading your resume...",
   "Parsing skills...",
@@ -28,14 +28,8 @@ export default function DropZone({ onParsed, onFileSelected }) {
     setState("error");
   }
 };
-const handleFileSelected = async (file) => {
-  const result = await uploadResume(file, github);   
-  const id = result.resume.id;
-  sessionStorage.setItem("resumeId", id);            
-  if (result.resume.processingStatus !== "COMPLETED") {
-    
-  }
-};
+
+
   const onDrop = (e) => {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
@@ -43,6 +37,17 @@ const handleFileSelected = async (file) => {
     else setState("idle");
   };
 
+  if (state === "error") {
+  return (
+    <div
+      onClick={() => setState("idle")}
+      className="cursor-pointer rounded-2xl border-2 border-dashed border-red-300 bg-red-50 p-10 text-center"
+    >
+      <p className="text-lg font-semibold text-red-600">Upload failed</p>
+      <p className="microtype mt-2 text-muted">Tap to try again</p>
+    </div>
+  );
+}
   if (state === "parsing") {
     return (
       <div className="relative overflow-hidden rounded-2xl border border-line bg-white p-8">

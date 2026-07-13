@@ -4,7 +4,6 @@ import StepIndicator from "../components/StepIndicator.jsx";
 import DropZone from "../components/DropZone.jsx";
 import { uploadResume, getResumeStatus } from '../services/api';
 
-<DropZone onFileSelected={handleFileSelected} onParsed={() => navigate("/careers")} />
 
 const inputClass =
   "w-full rounded-xl border border-line bg-white px-4 py-3 text-[15px] " +
@@ -13,7 +12,14 @@ const inputClass =
 export default function ResumeUpload() {
   const [github, setGithub] = useState("");
   const navigate = useNavigate();
-
+const handleFileSelected = async (file) => {
+    const result = await uploadResume(file, github);
+    const id = result.resume.id;
+    sessionStorage.setItem("resumeId", id);
+    if (result.resume.processingStatus !== "COMPLETED") {
+      // poll getResumeStatus(id) every 2s until COMPLETED 
+    }
+  };
   return (
     <main className="mx-auto min-h-screen max-w-2xl px-6 py-12">
       <StepIndicator current={1} />
@@ -44,7 +50,7 @@ export default function ResumeUpload() {
         </div>
 
         {github.trim() ? (
-          <DropZone onParsed={() => navigate("/careers")} />
+          <DropZone onFileSelected={handleFileSelected} onParsed={() => navigate("/careers")} />
         ) : (
           <div className="rounded-2xl border-2 border-dashed border-line bg-white/50 p-10 text-center opacity-60">
             <p className="text-lg font-semibold text-muted">
