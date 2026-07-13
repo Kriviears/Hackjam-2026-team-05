@@ -18,6 +18,10 @@ server/generated/
 
 # Uploads
 server/uploads/
+node_modules
+dist
+.env
 
-# OS junk
-.DS_Store
+server/generated/
+server/dev.db
+*.db

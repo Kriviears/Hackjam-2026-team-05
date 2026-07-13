@@ -18,14 +18,10 @@ export default function RoleCard({ role, selected, onSelect }) {
         <Icon className="h-5 w-5 text-ps-blue-dark" />
       </div>
       <h3 className="mt-4 font-display text-lg font-extrabold">{role.Title}</h3>
-      <p className="mt-1 text-sm text-muted line-clamp-3">{role.Description}</p>
+      <p className="mt-1 text-sm text-muted">{role.Description}</p>
       <div className="mt-4 flex items-center justify-between border-t border-line pt-3">
-        <span className="microtype text-muted">Salary range</span>
-        <span className="text-sm font-bold">
-          {role.salaryMin != null && role.salaryMax != null
-            ? `$${(role.salaryMin / 1000).toFixed(0)}k – $${(role.salaryMax / 1000).toFixed(0)}k`
-            : "—"}
-        </span>
+        <span className="microtype text-muted">Avg. salary</span>
+        <span className="text-sm font-bold">${(role.averageSalary / 1000).toFixed(0)}k</span>
       </div>
     </button>
   );

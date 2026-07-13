@@ -1,9 +1,8 @@
 // client/src/pages/CareerPicker.jsx
+import { useState } from "react";
 import RoleCard from "../components/RoleCard.jsx";
 import StepIndicator from "../components/StepIndicator.jsx";
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
-import { getCareerRecommendations } from "../services/api"
 
 const DUMMY_ROLES = [
   { lucideIcon: "Palette", Title: "Creative Technologist", Description: "Blend design and code to ship interactive experiences.", averageSalary: 112000 },
@@ -17,15 +16,6 @@ const DUMMY_ROLES = [
   { lucideIcon: "GraduationCap", Title: "Technical Instructor", Description: "Teach the next cohort what you just learned.", averageSalary: 77000 },];
 
 export default function CareerPicker() {
-  const [roles, setRoles] = useState([]);
-
-  useEffect(() => {
-    const resumeId = sessionStorage.getItem("resumeId");
-    if (!resumeId) return;
-    getCareerRecommendations(resumeId)
-      .then(setRoles)
-      .catch((err) => console.warn("Recommendations failed:", err.message));
-  }, []);
   const [selected, setSelected] = useState(null);
   const navigate = useNavigate();
 
@@ -44,7 +34,7 @@ export default function CareerPicker() {
       </header>
 
        <div className="mt-8 grid gap-4 md:grid-cols-3">
-      {roles.map((role) => (
+      {DUMMY_ROLES.map((role) => (
         <RoleCard
           key={role.Title}
           role={role}
@@ -56,11 +46,7 @@ export default function CareerPicker() {
 
       <button
         disabled={!selected}
-       onClick={() => {
-          const chosen = roles.find((r) => r.Title === selected);
-          sessionStorage.setItem("selectedCareer", JSON.stringify(chosen));
-          navigate("/optimize");
-        }}
+        onClick={() => navigate("/optimize")}
         className="mt-8 w-full rounded-xl bg-ps-navy py-3.5 font-semibold text-white transition-colors hover:bg-ps-blue-dark disabled:cursor-not-allowed disabled:opacity-40"
       >
         Continue to resume optimization <span className="text-ps-gold">→</span>

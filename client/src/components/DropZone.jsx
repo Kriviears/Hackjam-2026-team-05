@@ -12,23 +12,22 @@ export default function DropZone({ onParsed, onFileSelected }) {
   const [fileName, setFileName] = useState(null);
   const inputRef = useRef(null);
 
-  const startParse = async (file) => {
-  setFileName(file.name);
-  setState("parsing");
-  setLineIndex(0);
-  const timer = setInterval(() => {
-    setLineIndex((i) => (i + 1) % PARSE_LINES.length);
-  }, 700);
-  try {
-    await onFileSelected(file);   // real upload + poll, owned by the page
-    clearInterval(timer);
-    onParsed?.(file);
-  } catch (err) {
-    clearInterval(timer);
-    setState("error");
-  }
-};
-
+  const startParse = (file) => {
+    setFileName(file.name);
+    setState("parsing");
+    setLineIndex(0);
+    // fake AI pass — swap for services/api.js upload + poll when backend lands
+    const timer = setInterval(() => {
+      setLineIndex((i) => {
+        if (i >= PARSE_LINES.length - 1) {
+          clearInterval(timer);
+          setTimeout(() => onParsed?.(file), 500);
+          return i;
+        }
+        return i + 1;
+      });
+    }, 700);
+  };
 
   const onDrop = (e) => {
     e.preventDefault();

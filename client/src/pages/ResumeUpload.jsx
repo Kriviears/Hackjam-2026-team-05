@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import StepIndicator from "../components/StepIndicator.jsx";
 import DropZone from "../components/DropZone.jsx";
-import { uploadResume, getResumeStatus, analyzeResume } from '../services/api';
 
 const inputClass =
   "w-full rounded-xl border border-line bg-white px-4 py-3 text-[15px] " +
@@ -50,7 +49,7 @@ const handleFileSelected = async (file) => {
         </div>
 
         {github.trim() ? (
-          <DropZone onFileSelected={handleFileSelected} onParsed={() => navigate("/careers")} />
+          <DropZone onParsed={() => navigate("/careers")} />
         ) : (
           <div className="rounded-2xl border-2 border-dashed border-line bg-white/50 p-10 text-center opacity-60">
             <p className="text-lg font-semibold text-muted">

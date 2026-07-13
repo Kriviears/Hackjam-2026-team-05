@@ -1,8 +1,6 @@
-import { useState, useEffect } from "react";
 import StepIndicator from "../components/StepIndicator.jsx";
 import GaugeCard from "../components/GaugeCard.jsx";
 import ActionCard from "../components/ActionCard.jsx";
-
 
 const MOCK_REPORT = {
   ReadinessScore: 67,
@@ -27,35 +25,6 @@ const statusStyles = {
 };
 
 export default function ReadinessReport() {
-    const [report, setReport] = useState(MOCK_REPORT);
-
-  useEffect(() => {
-    const career = JSON.parse(sessionStorage.getItem("selectedCareer") || "null");
-    if (!career) return;
-
-    const missing = career.missingSkills ?? [];
-    const matched = career.matchedSkills ?? [];
-    const score = Math.max(
-      10,
-      Math.round((career.matchScore ?? 50) - missing.length * 4)
-    );
-
-    setReport({
-      ReadinessScore: score,
-      PersonalizedActionList: missing.slice(0, 4).map((skill) => ({
-        lucideIcon: "Target",
-        type: "SKILL GAP",
-        title: `Build evidence of ${skill}`,
-        description: `Add a project or resume line showing ${skill} for ${career.Title}.`,
-      })),
-      MileStones: [
-        { Title: "Resume Analysis", Status: "complete" },
-        { Title: "Career Match", Status: "complete" },
-        { Title: "Resume Optimization", Status: "complete" },
-        { Title: "Job-Ready Review", Status: "active" },
-      ],
-    });
-  }, []);
   return (
     <main className="mx-auto max-w-5xl px-6 py-12">
       <StepIndicator current={4} />
@@ -70,7 +39,7 @@ export default function ReadinessReport() {
       <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_40%]">
         <GaugeCard
           title="Readiness Score"
-          score={report.ReadinessScore}
+          score={MOCK_REPORT.ReadinessScore}
           leftLabel="Getting started"
           rightLabel="Job-ready"
           footer="Based on: resume + career match analysis"
@@ -79,7 +48,7 @@ export default function ReadinessReport() {
         <div className="rounded-2xl border border-line bg-white p-6 shadow-sm">
           <p className="microtype text-muted">Milestones</p>
           <div className="mt-2">
-            {report.MileStones.map((m) => (
+            {MOCK_REPORT.MileStones.map((m) => (
               <div key={m.Title} className="flex items-center justify-between border-b border-line py-3 last:border-0">
                 <span className="font-medium">{m.Title}</span>
                 <span className={"microtype " + statusStyles[m.Status]}>{m.Status}</span>
@@ -91,7 +60,7 @@ export default function ReadinessReport() {
 
       <p className="microtype mt-10 text-muted">Your personalized action list</p>
       <div className="mt-3 grid gap-4 sm:grid-cols-2">
-        {report.PersonalizedActionList.map((item) => (
+        {MOCK_REPORT.PersonalizedActionList.map((item) => (
           <ActionCard key={item.title} {...item} />
         ))}
       </div>

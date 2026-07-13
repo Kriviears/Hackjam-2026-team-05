@@ -1,5 +1,4 @@
-import { useState, useEffect } from "react";
-import { getResumeAnalysis } from "../services/api";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import StepIndicator from "../components/StepIndicator.jsx";
 import GaugeCard from "../components/GaugeCard.jsx";
@@ -22,31 +21,6 @@ const MOCK_ANALYSIS = {
 };
 
 export default function ResumeOptimization() {
-    const [analysis, setAnalysis] = useState(MOCK_ANALYSIS);
-
-  useEffect(() => {
-    const resumeId = sessionStorage.getItem("resumeId");
-    const career = JSON.parse(sessionStorage.getItem("selectedCareer") || "null");
-    if (!resumeId || !career) return;
-
-    getResumeAnalysis(resumeId)
-      .then((data) => {
-        setAnalysis({
-          ResumeTitle: data.resume.originalFileName,
-          ResumeUploadDate: data.resume.uploadedAt?.slice(0, 10),
-          MatchScore: career.matchScore,
-          CareerChoice: career.Title,
-          Skills: (data.skills ?? []).map((s) => s.name),
-          MatchedKeywords: career.matchedSkills,
-          MissingKeywords: career.missingSkills,
-          SuggestedActions: career.missingSkills.map((skill) => ({
-            Action: `Add evidence of ${skill} to your resume`,
-            Complete: false,
-          })),
-        });
-      })
-      .catch((err) => console.warn("Analysis fetch failed:", err.message));
-  }, []);
   const [checked, setChecked] = useState([]);
   const navigate = useNavigate();
 
@@ -64,12 +38,12 @@ export default function ResumeOptimization() {
         {/* LEFT — resume summary */}
         <div className="rounded-2xl border border-line bg-white p-6 shadow-sm self-start">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-ps-gold/20 text-xl">📄</div>
-          <p className="mt-4 font-semibold">{analysis.ResumeTitle}</p>
-          <p className="microtype mt-1 text-muted">Uploaded {analysis.ResumeUploadDate}</p>
+          <p className="mt-4 font-semibold">{MOCK_ANALYSIS.ResumeTitle}</p>
+          <p className="microtype mt-1 text-muted">Uploaded {MOCK_ANALYSIS.ResumeUploadDate}</p>
 
           <p className="microtype mt-6 text-muted">Skills detected</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            {analysis.Skills.map((s) => (
+            {MOCK_ANALYSIS.Skills.map((s) => (
               <span key={s} className="rounded-lg border border-line bg-bg-warm px-3 py-1.5 text-sm">{s}</span>
             ))}
           </div>
@@ -86,17 +60,17 @@ export default function ResumeOptimization() {
         <div className="space-y-6">
           <GaugeCard
             title="Keyword Match Score"
-            score={analysis.MatchScore}
+            score={MOCK_ANALYSIS.MatchScore}
             leftLabel="Weak match"
             rightLabel="Strong match"
-            footer={`Based on: ${analysis.CareerChoice} requirements`}
+            footer={`Based on: ${MOCK_ANALYSIS.CareerChoice} requirements`}
           />
 
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
               <p className="microtype text-muted">✓ Keywords matched</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                {analysis.MatchedKeywords.map((k) => (
+                {MOCK_ANALYSIS.MatchedKeywords.map((k) => (
                   <KeywordChip key={k} label={k} variant="matched" />
                 ))}
               </div>
@@ -104,7 +78,7 @@ export default function ResumeOptimization() {
             <div>
               <p className="microtype text-muted">⚠ Keywords to add</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                {analysis.MissingKeywords.map((k) => (
+                {MOCK_ANALYSIS.MissingKeywords.map((k) => (
                   <KeywordChip key={k} label={k} variant="missing" />
                 ))}
               </div>
@@ -114,7 +88,7 @@ export default function ResumeOptimization() {
           <div className="rounded-2xl border border-line bg-white p-6 shadow-sm">
             <p className="microtype text-muted">Suggested actions</p>
             <div className="mt-2">
-              {analysis.SuggestedActions.map((a, i) => (
+              {MOCK_ANALYSIS.SuggestedActions.map((a, i) => (
                 <label key={i} className="flex items-start gap-3 border-b border-line py-3 last:border-0">
                   <input type="checkbox" checked={checked.includes(i)} onChange={() => toggle(i)} className="mt-1" />
                   <span className={checked.includes(i) ? "text-muted line-through" : ""}>{a.Action}</span>
