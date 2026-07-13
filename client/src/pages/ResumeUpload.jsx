@@ -10,7 +10,15 @@ const inputClass =
 export default function ResumeUpload() {
   const [github, setGithub] = useState("");
   const navigate = useNavigate();
-
+const handleFileSelected = async (file) => {
+    const result = await uploadResume(file, github);
+    const id = result.resume.id;
+    sessionStorage.setItem("resumeId", id);
+    await analyzeResume(id);
+    if (result.resume.processingStatus !== "COMPLETED") {
+      // poll getResumeStatus(id) every 2s until COMPLETED 
+    }
+  };
   return (
     <main className="mx-auto min-h-screen max-w-2xl px-6 py-12">
       <StepIndicator current={1} />

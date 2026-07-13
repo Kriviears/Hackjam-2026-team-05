@@ -1,17 +1,12 @@
 import { useRef, useState } from "react";
 
-/**
- * Resume drop zone. Three states: idle → drag-over → parsing.
- * The parsing state is deliberate theater: mono status lines tick
- * while the "AI reads" the resume. onParsed fires when done.
- */
 const PARSE_LINES = [
   "Reading your resume...",
   "Parsing skills...",
   "Matching roles...",
 ];
 
-export default function DropZone({ onParsed }) {
+export default function DropZone({ onParsed, onFileSelected }) {
   const [state, setState] = useState("idle"); // idle | over | parsing
   const [lineIndex, setLineIndex] = useState(0);
   const [fileName, setFileName] = useState(null);
@@ -41,6 +36,17 @@ export default function DropZone({ onParsed }) {
     else setState("idle");
   };
 
+  if (state === "error") {
+  return (
+    <div
+      onClick={() => setState("idle")}
+      className="cursor-pointer rounded-2xl border-2 border-dashed border-red-300 bg-red-50 p-10 text-center"
+    >
+      <p className="text-lg font-semibold text-red-600">Upload failed</p>
+      <p className="microtype mt-2 text-muted">Tap to try again</p>
+    </div>
+  );
+}
   if (state === "parsing") {
     return (
       <div className="relative overflow-hidden rounded-2xl border border-line bg-white p-8">

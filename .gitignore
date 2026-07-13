@@ -3,20 +3,21 @@ node_modules/
 
 # Environment files
 .env
+server/.env
 
-# SQLite database
-dev.db
-*.db-journal
+# Build output
+dist/
 
- Allow the shared demo database
-!server/data/dev.db
+# Database
+server/dev.db
+server/data/
+server/prisma/dev.db
 
-# Generated Prisma client
-generated/
+# Prisma generated client
+server/generated/
 
-# Locally uploaded resumes
+# Uploads
 server/uploads/
-=======
 node_modules
 dist
 .env
