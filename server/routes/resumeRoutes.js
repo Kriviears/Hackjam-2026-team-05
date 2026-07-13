@@ -20,7 +20,9 @@ const {
 } = require("../services/ai/resumeAnalyzer");
 
 const {
+  fetchCareerSalaryData,
   getJobOutlook,
+  isCacheFresh,
 } = require("../services/blsService");
 
 const {
@@ -38,6 +40,113 @@ const adapter = new PrismaBetterSqlite3({
 });
 
 const prisma = new PrismaClient({ adapter });
+
+// BLS CACHE SETTINGS
+const BLS_CACHE_MAX_AGE_DAYS = 365;
+
+/**
+ * Retrieves and stores BLS salary data for one recommended career.
+ *
+ * Existing fresh salary data is returned from SQLite.
+ * A failed BLS lookup is recorded but does not throw an error
+ * that would prevent the remaining recommendations from loading.
+ *
+ * @param {object} careerRole
+ * @returns {Promise<object>}
+ */
+async function enrichCareerWithBlsSalary(careerRole) {
+  const hasCachedSalary =
+    careerRole.salaryMin !== null &&
+    careerRole.salaryMax !== null;
+
+  const cacheIsFresh = isCacheFresh(
+    careerRole.blsDataUpdatedAt,
+    BLS_CACHE_MAX_AGE_DAYS
+  );
+
+  // Return existing SQLite data when it is complete and fresh.
+  if (hasCachedSalary && cacheIsFresh) {
+    // Backfill lookup tracking for salary records created
+    // before the tracking fields were added.
+    if (!careerRole.blsLookupAttempted) {
+      return prisma.careerRole.update({
+        where: {
+          id: careerRole.id,
+        },
+        data: {
+          blsLookupAttempted: true,
+          blsLookupAttemptedAt:
+            careerRole.blsDataUpdatedAt || new Date(),
+          blsLookupError: null,
+        },
+      });
+    }
+
+    return careerRole;
+  }
+
+  try {
+    const salaryData =
+      await fetchCareerSalaryData(careerRole);
+
+    const salaryAvailable =
+      salaryData.salaryMin !== null ||
+      salaryData.salaryMax !== null;
+
+    return await prisma.careerRole.update({
+      where: {
+        id: careerRole.id,
+      },
+      data: {
+        blsOccupationCode:
+          salaryData.blsOccupationCode,
+
+        salaryMin:
+          salaryData.salaryMin,
+
+        salaryMax:
+          salaryData.salaryMax,
+
+        wageSource:
+          salaryAvailable
+            ? "BLS OEWS"
+            : null,
+
+        blsDataUpdatedAt:
+          salaryAvailable
+            ? new Date()
+            : null,
+
+        sourceUpdatedAt:
+          salaryAvailable
+            ? new Date()
+            : careerRole.sourceUpdatedAt,
+
+        // Record every BLS lookup attempt, including
+        // successful requests that return no wage data.
+        blsLookupAttempted: true,
+        blsLookupAttemptedAt: new Date(),
+        blsLookupError: null,
+      },
+    });
+  } catch (blsError) {
+    console.error(
+      `Unable to retrieve BLS salary for career ${careerRole.id}:`,
+      blsError
+    );
+
+    return prisma.careerRole.update({
+      where: {
+        id: careerRole.id,
+      },
+      data: {
+        blsLookupAttempted: true,
+        blsLookupAttemptedAt: new Date(),
+        blsLookupError: blsError.message,
+      },
+    });
+  }
+}
 
 // UPLOAD DIRECTORY
 const uploadDirectory = path.join(
@@ -549,20 +658,20 @@ router.get(
 
         analysis: resume.analysis
           ? {
-              id: resume.analysis.id,
-              analysisStatus:
-                resume.analysis.analysisStatus,
+            id: resume.analysis.id,
+            analysisStatus:
+              resume.analysis.analysisStatus,
 
-              professionalSummary:
-                resume.analysis
-                  .professionalSummary,
+            professionalSummary:
+              resume.analysis
+                .professionalSummary,
 
-              analysisError:
-                resume.analysis.analysisError,
+            analysisError:
+              resume.analysis.analysisError,
 
-              analyzedAt:
-                resume.analysis.analyzedAt,
-            }
+            analyzedAt:
+              resume.analysis.analyzedAt,
+          }
           : null,
 
         skills: resume.skills.map((skill) => ({
@@ -720,7 +829,7 @@ router.post(
         await generateCareerRecommendations(
           resumeProfile,
           careerCandidates,
-          5
+          9
         );
 
       const recommendedCareerIds =
@@ -801,8 +910,27 @@ router.post(
           }
         );
 
+      // Check every selected recommendation against BLS before
+      // returning the recommendation cards to the frontend.
+      //
+      // Process the five records sequentially to avoid sending
+      // several BLS requests at exactly the same time.
+      const enrichedRecommendations = [];
+
+      for (const recommendation of savedRecommendations) {
+        const enrichedCareerRole =
+          await enrichCareerWithBlsSalary(
+            recommendation.careerRole
+          );
+
+        enrichedRecommendations.push({
+          ...recommendation,
+          careerRole: enrichedCareerRole,
+        });
+      }
+
       const formattedRecommendations =
-        savedRecommendations.map(
+        enrichedRecommendations.map(
           (recommendation) => ({
             recommendationId:
               recommendation.id,
@@ -819,12 +947,12 @@ router.post(
 
             matchedSkills: JSON.parse(
               recommendation.matchedSkillsJson ||
-                "[]"
+              "[]"
             ),
 
             missingSkills: JSON.parse(
               recommendation.missingSkillsJson ||
-                "[]"
+              "[]"
             ),
 
             career: {
@@ -1083,12 +1211,12 @@ router.patch(
 
           matchedSkills: JSON.parse(
             selectedRecommendation.matchedSkillsJson ||
-              "[]"
+            "[]"
           ),
 
           missingSkills: JSON.parse(
             selectedRecommendation.missingSkillsJson ||
-              "[]"
+            "[]"
           ),
 
           career: {
@@ -1270,12 +1398,12 @@ router.get(
 
             matchedSkills: JSON.parse(
               recommendation.matchedSkillsJson ||
-                "[]"
+              "[]"
             ),
 
             missingSkills: JSON.parse(
               recommendation.missingSkillsJson ||
-                "[]"
+              "[]"
             ),
 
             career: {
@@ -1913,8 +2041,8 @@ router.post(
 
       const parsedNextStep = firstIncompleteSuggestion
         ? parseSuggestion(
-            firstIncompleteSuggestion.action
-          )
+          firstIncompleteSuggestion.action
+        )
         : null;
 
       const reachedTarget =
@@ -1950,12 +2078,12 @@ router.post(
                 nextStepTitle: reachedTarget
                   ? "Maintain career readiness"
                   : parsedNextStep?.title ||
-                    "Review résumé optimization",
+                  "Review résumé optimization",
 
                 nextStepDescription: reachedTarget
                   ? "Your résumé meets the current target score. Continue refining it as you gain experience."
                   : parsedNextStep?.description ||
-                    "Review the recommended résumé improvements and complete the next action.",
+                  "Review the recommended résumé improvements and complete the next action.",
 
                 nextStepActionLabel:
                   "Review optimization",
@@ -1988,12 +2116,12 @@ router.post(
                 nextStepTitle: reachedTarget
                   ? "Maintain career readiness"
                   : parsedNextStep?.title ||
-                    "Review résumé optimization",
+                  "Review résumé optimization",
 
                 nextStepDescription: reachedTarget
                   ? "Your résumé meets the current target score. Continue refining it as you gain experience."
                   : parsedNextStep?.description ||
-                    "Review the recommended résumé improvements and complete the next action.",
+                  "Review the recommended résumé improvements and complete the next action.",
 
                 nextStepActionLabel:
                   "Review optimization",
