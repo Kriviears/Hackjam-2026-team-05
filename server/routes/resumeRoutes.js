@@ -829,7 +829,7 @@ router.post(
         await generateCareerRecommendations(
           resumeProfile,
           careerCandidates,
-          5
+          9
         );
 
       const recommendedCareerIds =
