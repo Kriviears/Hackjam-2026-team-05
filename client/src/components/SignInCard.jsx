@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { login } from "../services/api";
 
 const inputClass =
   "w-full rounded-xl border border-line bg-white px-4 py-3 text-[15px] " +
@@ -10,6 +11,7 @@ const inputClass =
  * Verification lives inside the card so the flow stays one screen.
  * Swap the fake submit for services/api.js calls when the backend lands.
  */
+const [status, setStatus] = useState("idle"); // idle | loading | error
 export default function SignInCard() {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
@@ -70,11 +72,25 @@ export default function SignInCard() {
             </div>
           </div>
           <button
-            onClick={() => navigate("/upload")}
-            className="mt-2 w-full rounded-xl bg-ps-navy py-3.5 font-semibold text-white transition-colors hover:bg-ps-blue-dark"
+            disabled={status === "loading"}
+            onClick={async () => {
+              setStatus("loading");
+              try {
+                await login("francis@test.com", "Test123!");
+                navigate("/upload");
+              } catch {
+                setStatus("error");
+              }
+            }}
+            className="mt-2 w-full rounded-xl bg-ps-navy py-3.5 font-semibold text-white transition-colors hover:bg-ps-blue-dark disabled:opacity-60"
           >
-            Verify &amp; continue <span className="text-ps-gold">→</span>
+            {status === "loading" ? "Verifying..." : <>Verify &amp; continue <span className="text-ps-gold">→</span></>}
           </button>
+          {status === "error" && (
+            <p className="microtype text-center text-red-600">
+              Couldn't verify — is the server running?
+            </p>
+          )}
           <button
             onClick={() => setStep(0)}
             className="w-full text-center text-sm text-muted hover:text-ink"
