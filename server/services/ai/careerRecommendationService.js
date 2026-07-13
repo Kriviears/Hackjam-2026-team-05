@@ -180,7 +180,7 @@ function selectCareerCandidates(
 async function generateCareerRecommendations(
   resumeProfile,
   careerCandidates,
-  recommendationCount = 5
+  recommendationCount = 9
 ) {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY is not configured.");
