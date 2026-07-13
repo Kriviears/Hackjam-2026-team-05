@@ -3,6 +3,8 @@ import { useState } from "react";
 import RoleCard from "../components/RoleCard.jsx";
 import StepIndicator from "../components/StepIndicator.jsx";
 import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { getCareerRecommendations } from "../services/api"
 
 const DUMMY_ROLES = [
   { lucideIcon: "Palette", Title: "Creative Technologist", Description: "Blend design and code to ship interactive experiences.", averageSalary: 112000 },

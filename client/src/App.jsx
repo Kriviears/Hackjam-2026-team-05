@@ -4,6 +4,7 @@ import ResumeUpload from "./pages/ResumeUpload.jsx";
 import CareerPicker from "./pages/CareerPicker.jsx";
 import ResumeOptimization from "./pages/ResumeOptimization.jsx";
 import ReadinessReport from "./pages/ReadinessReport.jsx";
+import React from "react";
 
 export default function App() {
   return (

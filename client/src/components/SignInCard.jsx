@@ -11,9 +11,9 @@ const inputClass =
  * Verification lives inside the card so the flow stays one screen.
  * Swap the fake submit for services/api.js calls when the backend lands.
  */
-const [status, setStatus] = useState("idle"); // idle | loading | error
 export default function SignInCard() {
   const [step, setStep] = useState(0);
+  const [status, setStatus] = useState("idle"); // idle | loading | error
   const [form, setForm] = useState({
     name: "",
     email: "",
