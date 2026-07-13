@@ -30,6 +30,14 @@ export async function uploadResume(file, github) {
   if (!r.ok) throw new Error(`Upload failed: ${r.status}`);
   return r.json();
 }
+export async function analyzeResume(id) {
+  const r = await fetch(`${BASE}/api/resumes/${id}/analyze`, {
+    method: "POST",
+    headers: authHeader(),
+  });
+  if (!r.ok) throw new Error(`Analyze failed: ${r.status}`);
+  return r.json();
+}
 
 export async function getResumeStatus(id) {
   const r = await fetch(`${BASE}/api/resumes/${id}/analysis`, {
