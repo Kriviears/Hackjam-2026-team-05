@@ -73,5 +73,8 @@ export async function getCareerRecommendations(resumeId) {
         : null,
     matchScore: rec.matchScore,
     rank: rec.rank,
+    reason: rec.reason,
+    matchedSkills: rec.matchedSkills ?? [],
+    missingSkills: rec.missingSkills ?? [],
   }));
 }

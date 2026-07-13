@@ -56,7 +56,11 @@ export default function CareerPicker() {
 
       <button
         disabled={!selected}
-        onClick={() => navigate("/optimize")}
+       onClick={() => {
+          const chosen = roles.find((r) => r.Title === selected);
+          sessionStorage.setItem("selectedCareer", JSON.stringify(chosen));
+          navigate("/optimize");
+        }}
         className="mt-8 w-full rounded-xl bg-ps-navy py-3.5 font-semibold text-white transition-colors hover:bg-ps-blue-dark disabled:cursor-not-allowed disabled:opacity-40"
       >
         Continue to resume optimization <span className="text-ps-gold">→</span>
